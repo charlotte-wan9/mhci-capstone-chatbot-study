@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Helper Bot Study Prototype</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: sans-serif; }
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-4px)} }
+  .dot { display:inline-block; width:6px; height:6px; background:#9ca3af; border-radius:50%; animation:bounce 1.2s infinite; margin:0 2px; }
+  .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
+  .transcript-line { padding:6px 8px; border-radius:4px; }
+  .transcript-line.v3-mode { cursor:pointer; }
+  .transcript-line.v3-mode:hover { background:#eff6ff; }
+  .transcript-line.selected { background:#dbeafe; border-left:3px solid #3b82f6; }
+  .fade-in { animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+  #intro-overlay { transition: opacity .3s; }
+</style>
+</head>
+<body class="bg-gray-100 h-screen overflow-hidden flex flex-col">
+
+<!-- INTRO OVERLAY -->
+<div id="intro-overlay" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+  <div class="max-w-md text-center px-8">
+    <p class="text-xs text-gray-400 uppercase tracking-widest mb-2">Study Prototype</p>
+    <h1 class="text-3xl font-bold text-gray-900 mb-1">Helper Bot</h1>
+    <p class="text-sm text-gray-500 mb-6">Specialist AI Assistant · Input Modality Study</p>
+    <p class="text-sm text-gray-500 mb-3">Choose a sequence to begin:</p>
+    <div class="flex gap-3 justify-center">
+      <button onclick="beginStudy(0)" class="px-6 py-2.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors">1</button>
+      <button onclick="beginStudy(1)" class="px-6 py-2.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors">2</button>
+      <button onclick="beginStudy(2)" class="px-6 py-2.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors">3</button>
+    </div>
+    <p class="text-xs text-gray-400 mt-4 italic">Think aloud as you interact — verbalize what you're doing and why.</p>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-4 flex-shrink-0">
+  <div class="flex items-center gap-2">
+    <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+    <span class="text-xs font-semibold text-gray-800">LIVE CALL</span>
+    <span class="text-xs text-gray-400 font-mono" id="callTimer">00:03:12</span>
+  </div>
+  <div class="flex-1"></div>
+  <button onclick="prevProblem()" class="text-xs px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">← Prev Problem</button>
+  <button onclick="nextProblem()" class="text-xs px-3 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-800">Next Problem →</button>
+</div>
+
+<!-- MAIN -->
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- LEFT PANEL -->
+  <div class="w-5/12 flex flex-col bg-white border-r border-gray-200 overflow-hidden">
+
+    <!-- Call Summary -->
+    <div class="border-b border-gray-100 p-3 flex-shrink-0">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Call Content Summary <span class="font-normal normal-case">· via voice transcription</span></p>
+      <div id="callSummary" class="bg-gray-50 rounded p-2.5 text-xs text-gray-700 leading-relaxed max-h-36 overflow-y-auto">
+        <span class="text-gray-400 italic">Call in progress — awaiting transcript.</span>
+      </div>
+    </div>
+
+    <!-- Transcript -->
+    <div class="flex flex-col flex-1 overflow-hidden border-b border-gray-100">
+      <div class="flex items-center gap-2 px-3 pt-2.5 pb-1.5 flex-shrink-0">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Live Transcript <span class="font-normal normal-case">· Last 10 exchanges</span></p>
+        <span id="highlightBadge" class="hidden text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">✏ Highlight mode</span>
+      </div>
+      <div id="transcriptContainer" class="flex-1 overflow-y-auto px-3 pb-3 space-y-0.5"></div>
+    </div>
+
+    <!-- Customer Profile -->
+    <div id="customerProfile" class="p-3 flex-shrink-0 hidden">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Customer Profile</p>
+      <div class="bg-gray-50 rounded p-3">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center flex-shrink-0">DT</div>
+          <div class="flex-1">
+            <p class="text-xs font-semibold text-gray-800">Dodge Toyota</p>
+            <p class="text-xs text-gray-500">Commercial Auto · Portland, OR</p>
+          </div>
+          <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span>
+        </div>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mb-2">
+          <div><span class="text-gray-400">Policy: </span><span class="text-gray-700">P123457P854-922</span></div>
+          <div><span class="text-gray-400">Coverage: </span><span class="text-gray-700">$50K Liability</span></div>
+          <div><span class="text-gray-400">Vehicles: </span><span class="text-gray-700">2 on policy</span></div>
+          <div><span class="text-gray-400">Since: </span><span class="text-gray-700">Jan 2021</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="flex-1 flex flex-col overflow-hidden bg-gray-50">
+
+    <!-- Version Tabs -->
+    <div class="bg-white border-b border-gray-200 flex items-end px-4 pt-2">
+      <button id="vtab0" onclick="switchVersion(0)" class="px-4 py-2 text-sm font-medium rounded-t border border-b-0 mr-1">Quick Action</button>
+      <button id="vtab1" onclick="switchVersion(1)" class="px-4 py-2 text-sm font-medium rounded-t border border-b-0 mr-1">Chat</button>
+      <button id="vtab2" onclick="switchVersion(2)" class="px-4 py-2 text-sm font-medium rounded-t border border-b-0">Highlight</button>
+    </div>
+
+    <!-- Output Style Dropdowns -->
+    <div class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 flex-shrink-0">
+      <span class="text-xs text-gray-500 font-medium flex-shrink-0">Output style:</span>
+      <label class="flex flex-col gap-0.5">
+        <span class="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Tone</span>
+      <select id="selTone" class="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700">
+        <option value="formal">Formal</option>
+        <option value="assertive">Assertive</option>
+        <option value="collaborative">Collaborative</option>
+        <option value="reflective">Reflective</option>
+      </select>
+      </label>
+      <label class="flex flex-col gap-0.5">
+        <span class="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Length</span>
+        <select id="selLength" class="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700">
+          <option value="short">Short</option>
+          <option value="medium" selected>Medium</option>
+          <option value="long">Long</option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-0.5">
+        <span class="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Elements</span>
+        <select id="selElements" class="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700">
+          <option value="resolution">Resolution only</option>
+          <option value="thinking">Thinking + Resolution</option>
+          <option value="all">Thinking + Why + Resolution</option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-0.5">
+        <span class="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Persona</span>
+        <select id="selPersona" class="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-700">
+          <option value="supervisor">👔 Supervisor</option>
+          <option value="duck">🦆 Duck</option>
+          <option value="flo">🌸 Flo</option>
+        </select>
+      </label>
+      <div class="ml-auto flex-shrink-0">
+        <button onclick="regenCurrent()" class="text-xs px-3 py-1.5 border border-gray-200 rounded bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors">↺ Regenerate</button>
+      </div>
+    </div>
+
+    <!-- V1 -->
+    <div id="panel0" class="flex-1 flex flex-col overflow-hidden">
+      <div id="v1Banner" class="px-4 py-2 text-xs bg-purple-50 text-purple-800 border-b border-purple-100 flex-shrink-0"></div>
+      <div id="v1ResponseArea" class="flex-1 overflow-y-auto p-4">
+        <div id="v1Placeholder" class="flex flex-col items-center justify-center h-full text-gray-400">
+          <div class="text-3xl mb-2">🤖</div>
+          <p class="text-sm font-medium text-gray-500">AI reads call context automatically.</p>
+          <p class="text-xs text-gray-400 mt-1">Select a support type below to get help.</p>
+        </div>
+      </div>
+      <div class="border-t border-gray-200 bg-white p-3 flex-shrink-0">
+        <p class="text-xs text-gray-400 italic mb-2">⚠ Consider double checking AI answers. Do not use this as a source for surfacing guidelines. Supported: Caller Concern · Call Recap · Do I Need SRT? · System Issue.</p>
+        <div id="v1Buttons" class="flex gap-2 mb-2">
+          <button onclick="triggerV1()" class="flex-1 text-xs px-2 py-2 border border-gray-200 rounded hover:bg-red-50 hover:border-red-300">⚠️ System Issue</button>
+          <button onclick="triggerV1()" class="flex-1 text-xs px-2 py-2 border border-gray-200 rounded hover:bg-yellow-50 hover:border-yellow-300">🔁 Call Recap</button>
+          <button onclick="triggerV1()" class="flex-1 text-xs px-2 py-2 border border-gray-200 rounded hover:bg-purple-50 hover:border-purple-300">💙 Caller Concern</button>
+          <button onclick="triggerV1()" class="flex-1 text-xs px-2 py-2 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300">📋 Do I Need SRT?</button>
+        </div>
+        <div class="flex gap-2">
+          <input id="v1Input" type="text" placeholder="Enter a note or choose directly..." class="flex-1 border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:border-blue-400" onkeydown="if(event.key==='Enter')triggerV1()" />
+          <button onclick="triggerV1()" class="px-3 py-2 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- V2 -->
+    <div id="panel1" class="hidden flex-1 flex flex-col overflow-hidden">
+      <div id="v2Banner" class="px-4 py-2 text-xs bg-purple-50 text-purple-800 border-b border-purple-100 flex-shrink-0"></div>
+      <div id="v2ChatArea" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <div id="v2Placeholder" class="flex flex-col items-center justify-center h-full text-gray-400">
+          <div class="text-3xl mb-2">💬</div>
+          <p class="text-sm font-medium text-gray-500">AI reads call context automatically.</p>
+          <p class="text-xs text-gray-400 mt-1">Type anything to get help.</p>
+        </div>
+      </div>
+      <div class="border-t border-gray-200 bg-white p-3 flex-shrink-0">
+        <p class="text-xs text-gray-400 italic mb-2">⚠ Consider double checking AI answers. Do not use this as a source for surfacing guidelines. Supported: Caller Concern · Call Recap · Do I Need SRT? · System Issue.</p>
+        <div class="flex gap-2">
+        <input id="v2Input" type="text" placeholder="Describe what you need help with..." class="flex-1 border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:border-blue-400" onkeydown="if(event.key==='Enter')sendV2()" />
+        <button onclick="sendV2()" class="px-3 py-2 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- V3 -->
+    <div id="panel2" class="hidden flex-1 flex flex-col overflow-hidden">
+      <div id="v3Banner" class="px-4 py-2 text-xs bg-purple-50 text-purple-800 border-b border-purple-100 flex-shrink-0"></div>
+      <div id="v3ResponseArea" class="flex-1 overflow-y-auto p-4">
+        <div id="v3Placeholder" class="flex flex-col items-center justify-center h-full text-gray-400">
+          <div class="text-3xl mb-2">✏️</div>
+          <p class="text-sm font-medium text-gray-500">AI reads call context automatically.</p>
+          <p class="text-xs text-gray-400 mt-1">Click lines in the transcript to highlight relevant context,</p>
+          <p class="text-xs text-gray-400">then send to the Helper Bot.</p>
+        </div>
+      </div>
+      <div id="v3BottomEmpty" class="border-t border-gray-200 bg-white p-3 flex-shrink-0">
+        <p class="text-xs text-gray-400 italic mb-2">⚠ Consider double checking AI answers. Do not use this as a source for surfacing guidelines. Supported: Caller Concern · Call Recap · Do I Need SRT? · System Issue.</p>
+        <p class="text-xs text-gray-400 text-center">← Click lines in the transcript to select them</p>
+      </div>
+      <div id="v3BottomSelected" class="hidden border-t border-gray-200 bg-white p-3 flex-shrink-0">
+        <p class="text-xs text-gray-400 italic mb-2">⚠ Consider double checking AI answers. Do not use this as a source for surfacing guidelines. Supported: Caller Concern · Call Recap · Do I Need SRT? · System Issue.</p>
+        <p class="text-xs text-gray-500 font-medium mb-1">Selected context:</p>
+        <div id="v3SelectedText" class="text-xs bg-blue-50 text-blue-800 rounded p-2 mb-2 italic"></div>
+        <div class="flex gap-2">
+          <input id="v3Input" type="text" placeholder="Add a note or send directly..." class="flex-1 border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:border-blue-400" onkeydown="if(event.key==='Enter')sendV3()" />
+          <button onclick="sendV3()" class="px-3 py-2 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 whitespace-nowrap">Ask Helper Bot</button>
+          <button onclick="clearV3()" class="px-3 py-2 border border-gray-200 text-gray-500 rounded text-xs hover:bg-gray-50">Clear</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let currentProblem = 0;
+let currentVersion = 0;
+let v3Selected = [];
+let thinking = false;
+let transcriptRevealed = 0;   // lines revealed for current problem
+let transcriptAnimating = false;
+
+// ─── PROBLEM META ─────────────────────────────────────────────────────────────
+const problemLabels = ['Caller Concern', 'Call Recap', 'Do I Need SRT?', 'System Issue'];
+const bannerText = [
+  '💙 Problem 1 of 4: The customer is pushing back on the SSN request during security verification.',
+  '🔁 Problem 2 of 4: Security verification is complete. You need a reminder of what the customer wanted.',
+  '📋 Problem 3 of 4: You\'ve hit a potential Alaska regulation issue and aren\'t sure if you need to escalate.',
+  '⚡ Problem 4 of 4: A sudden system update cut off the call. The customer is unreachable and has no confirmation of his policy changes.'
+];
+const bannerStyles = [
+  'bg-purple-50 text-purple-800 border-purple-100',
+  'bg-yellow-50 text-yellow-800 border-yellow-100',
+  'bg-blue-50 text-blue-800 border-blue-100',
+  'bg-red-50 text-red-800 border-red-100'
+];
+
+// ─── TRANSCRIPT DATA ──────────────────────────────────────────────────────────
+const transcripts = [
+  // Problem 0 — Caller Concern (SSN pushback)
+  [
+    {t:'10:02', who:'Specialist', text:"Thanks for calling Progressive customer service, this is Alex. How can I help you today?"},
+    {t:'10:02', who:'Customer', text:"Hi, this is Dodge Toyota. I'm trying to add a new car to my fleet and I'm driving to Alaska — I want to make sure it's added before I get there."},
+    {t:'10:03', who:'Specialist', text:"Hi Mr. Toyota, I'd be happy to help with that. Can I get your policy number?"},
+    {t:'10:03', who:'Customer', text:"Yes, it's P123457P854-922."},
+    {t:'10:04', who:'Specialist', text:"Thank you. And can I have your social security number for verification?"},
+    {t:'10:04', who:'Customer', text:"Um, WHY do you need my social security number? Are you trying to steal my identity???", hint:true},
+    {t:'10:05', who:'Customer', text:"I don't want to give that out over the phone. This doesn't seem right to me.", hint:true},
+    {t:'10:05', who:'Specialist', text:"I completely understand the concern, Mr. Toyota — let me explain why we ask for that..."},
+  ],
+  // Problem 1 — Call Recap (what did customer want)
+  [
+    {t:'10:06', who:'Customer', text:"Oh okay, I see. Sorry about that — it's 643-12-4596."},
+    {t:'10:06', who:'Specialist', text:"No worries at all, Mr. Toyota. Security verified — thank you for your patience."},
+    {t:'10:07', who:'Specialist', text:"So just to make sure I have everything right for you today...", hint:true},
+    {t:'10:07', who:'Customer', text:"Yes — exactly. Can we please get started?"},
+    {t:'10:08', who:'Specialist', text:"Of course! Could you give me the license plate of the vehicle you'd like to add?"},
+    {t:'10:08', who:'Customer', text:"It's IZN-7829. It's a 2021 Ford F-150 XLT, four-door pickup, VIN ending in 4821, silver, about 38,000 miles."},
+    {t:'10:09', who:'Specialist', text:"Got it, let me get that entered for you now."},
+    {t:'10:10', who:'Customer', text:"And don't forget about the Alaska part — I leave in two days."},
+  ],
+  // Problem 2 — Do I Need SRT? (Alaska regulation gap)
+  [
+    {t:'10:11', who:'Specialist', text:"Alright, the 2021 Ford F-150 has been added to your fleet. Now let me check your policy for Alaska compliance."},
+    {t:'10:12', who:'Customer', text:"Great. Do you think there will be any issues?"},
+    {t:'10:12', who:'Specialist', text:"Let me pull up Alaska's state requirements for your policy type...", hint:true},
+    {t:'10:13', who:'Specialist', text:"I'm seeing that Alaska requires a minimum $100,000 liability for personal auto policies operating out-of-state. Your current coverage is $50,000.", hint:true},
+    {t:'10:13', who:'Customer', text:"Is that going to be a problem? I thought I was fully covered."},
+    {t:'10:14', who:'Specialist', text:"There's a coverage gap for Alaska travel. I want to make sure I handle this correctly..."},
+    {t:'10:14', who:'Specialist', text:"I'm not sure if I can apply the Alaska endorsement myself or if this needs to go to a specialist...", hint:true},
+    {t:'10:15', who:'Customer', text:"Well, can you figure it out? I really need to leave on schedule."},
+  ],
+  // Problem 3 — System Update / Call Dropped
+  [
+    {t:'10:16', who:'Specialist', text:"Great news — the Alaska endorsement has been applied and the F-150 is confirmed on your fleet. You're all set for the trip!"},
+    {t:'10:16', who:'Customer', text:"That's such a relief. Thank you so much for handling all of this."},
+    {t:'10:17', who:'Specialist', text:"Of course! Is there anything else I can help you with before we—"},
+    {t:'10:17', who:'SYSTEM', text:"⚡ SYSTEM UPDATE INITIATED — Unexpected platform update in progress. All voice connections interrupted.", hint:true, isSystem:true},
+    {t:'10:17', who:'SYSTEM', text:"Call terminated. Customer disconnected. Estimated system restoration: 20–30 minutes.", hint:true, isSystem:true},
+    {t:'10:18', who:'Specialist', text:"[attempted callback] Unable to reach customer — system still updating."},
+    {t:'10:18', who:'Specialist', text:"Customer leaves tomorrow morning. He has no written confirmation of his policy changes yet.", hint:true},
+    {t:'10:19', who:'Specialist', text:"Need to reach Mr. Toyota via text or email before his trip.", hint:true},
+  ]
+];
+
+// ─── SCRIPTED RESPONSES ───────────────────────────────────────────────────────
+const personas = {
+  supervisor: { label: 'Supervisor', icon: '👔', color: '#1e3a5f' },
+  duck:       { label: 'Duck',       icon: '🦆', color: '#d97706' },
+  flo:        { label: 'Flo',        icon: '🌸', color: '#be185d' }
+};
+
+// ─── PER-PROBLEM CONTENT ──────────────────────────────────────────────────────
+const problemData = [
+  // Problem 0 — Caller Concern
+  {
+    thinking: "Detecting customer alarm around identity and security. Reviewing last 30 seconds of transcript... Customer is anxious, not hostile — this is a trust barrier at the verification step.",
+    why: "The customer's reaction is a common trust barrier during verification. Pushing through without first acknowledging his concern is likely to increase resistance, not reduce it.",
+    resolutionShort: "Mr. Toyota is worried about identity theft, not being difficult. Reassure him: 'We only ask for your SSN to verify your identity — it's standard protocol and is never stored on my end.'",
+    resolutionMedium: "Mr. Toyota's reaction is common — he's genuinely worried about identity theft. Validate that first: 'That's a completely fair concern, and I appreciate you asking.' Then explain it's required to confirm you're the account holder before accessing any policy details, and the number is never stored on your end. Pause after explaining and let him respond before moving forward.",
+    resolutionLong: "Three-step approach:\n\n1. Validate: 'That's a completely understandable reaction — I hear this concern often.'\n\n2. Explain clearly: 'We require it to confirm you're the account holder before we can access or modify any policy details. It's never stored on my end.'\n\n3. Hand back control: 'If you're still not comfortable, I can walk you through our alternative verification options.' Then pause — let him decide to proceed.",
+  },
+  // Problem 1 — Call Recap
+  {
+    thinking: "Scanning back through the call context... Retrieving the customer's initial request from before the security verification.",
+    why: "The customer stated his needs clearly at the start of the call. A quick recap here prevents any details from being missed now that verification is complete.",
+    resolutionShort: "Two requests: (1) Add 2021 Ford F-150 XLT, plate IZN-7829 to his fleet. (2) Crosscheck his policy for Alaska travel compliance — he's leaving in two days.",
+    resolutionMedium: "Here's what Dodge needs today:\n\n1. Add a new vehicle to his fleet — 2021 Ford F-150 XLT, plate IZN-7829, VIN ending 4821, silver, ~38,000 miles.\n2. Crosscheck his policy for Alaska travel compliance — he's leaving in two days and needs everything confirmed before he goes.",
+    resolutionLong: "Two items for today's call:\n\n1. Add a new vehicle to his fleet — 2021 Ford F-150 XLT, plate IZN-7829, VIN ending 4821, silver, ~38,000 miles.\n2. Crosscheck his policy for Alaska travel compliance — he's driving there in two days.\n\nNote: Mr. Toyota mentioned the Alaska trip twice during the call, indicating it's time-sensitive. Prioritize the Alaska compliance check once the vehicle is added.",
+  },
+  // Problem 2 — Do I Need SRT?
+  {
+    thinking: "Reviewing trip context... Mr. Toyota is driving to Alaska temporarily, not relocating. Checking whether a temporary out-of-state visit requires a full liability adjustment or just a travel endorsement notation...",
+    why: "Alaska's higher liability minimum applies to vehicles registered or permanently operating in the state. For a temporary trip, a short-term travel endorsement or notation typically satisfies the requirement — no liability increase and no SRT involvement needed.",
+    resolutionShort: "Since the trip is temporary, he likely doesn't need a liability increase. Check if a short-term travel endorsement or out-of-state trip notation covers the visit — this is the usual path for temporary Alaska travel and doesn't require SRT.",
+    resolutionMedium: "Before changing his coverage, consider the nature of the trip. Mr. Toyota is visiting Alaska temporarily, not relocating — Alaska's $100K minimum typically applies to vehicles permanently registered or based there.\n\nFor a temporary visit, you can likely add a short-term out-of-state travel endorsement or note the trip dates and destination on the policy. Check your endorsement options — this avoids a liability change and keeps SRT out of it.",
+    resolutionLong: "Alaska's $100K liability minimum is generally aimed at vehicles permanently registered or operating in the state. Since Mr. Toyota is traveling there temporarily, a full liability increase may not be necessary.\n\nSuggested path:\n• Check whether a temporary out-of-state travel endorsement applies\n• Note the trip dates and Alaska destination on the policy\n• Confirm his existing coverage is valid for the duration of the trip\n\nThis avoids modifying his underlying limits and doesn't require SRT involvement. If a temporary endorsement isn't available in your system, then revisit the coverage question — but try this route first.",
+  },
+  // Problem 3 — System Update / Call Dropped
+  {
+    thinking: "Reviewing call state at time of disconnect... All policy changes were completed before the system update: F-150 (plate IZN-7829) added to fleet, Alaska out-of-state endorsement applied. Customer was disconnected before receiving any confirmation.",
+    why: "Everything on the policy side is done — the system update only disrupted the call, not the changes themselves. Mr. Toyota doesn't know that yet, and he's leaving tomorrow. A proactive follow-up via text or email is the fastest way to close this without waiting for the system to restore.",
+    resolutionShort: "Follow-up email sent to Mr. Toyota. I confirmed that his F-150 (IZN-7829) and Alaska endorsement are active, apologized for the disconnect, and included the estimated system restoration time (20–30 min) and your direct callback number.",
+    resolutionMedium: "I've drafted and sent a follow-up email to Mr. Toyota on your behalf:\n\nSubject: Your Progressive policy is all set — sorry for the dropped call\n\nHi Mr. Toyota — we're sorry your call was cut short by an unexpected system update. All your changes went through: your 2021 Ford F-150 XLT (plate IZN-7829) has been added to your fleet and your Alaska out-of-state endorsement is active. The system should be restored within 20–30 minutes. Call [your direct number] if you have any questions before your trip.",
+    resolutionLong: "Follow-up email sent to Mr. Toyota. Here's what I sent and what's been logged:\n\nEmail sent:\n   Subject: Your Progressive policy is confirmed — sorry for the dropped call\n   • Apology for the unexpected system disconnect\n   • 2021 Ford F-150 XLT (plate IZN-7829) added to fleet ✓\n   • Alaska out-of-state endorsement applied and active ✓\n   • Estimated system restoration: 20–30 minutes\n   • Your direct callback number included\n\nCall log updated: 'System Disconnect — Follow-up Email Sent automatically by Helper Bot.'\n\nOnce the system restores, consider a brief callback to confirm he received everything before his trip tomorrow.",
+  }
+];
+
+// ─── FLO PERSONA DATA (bubbly, warm, exclamation-heavy, never corporate-stuffy) ──
+const floData = [
+  // Problem 0 — Caller Concern
+  {
+    thinking: "Ooh, picking up some real security anxiety here! Let me take a quick look at what's going on with Mr. Toyota...",
+    why: "His reaction is completely understandable — SSN requests can feel really alarming if you're not expecting them! Acknowledging that worry first (instead of just pushing through) is what actually gets him comfortable. It's a trust thing, and trust is everything! 🌸",
+    resolutionShort: "He's worried about identity theft — makes total sense! Just say: 'That's such a fair concern, and I'm really glad you asked! We only use your SSN to confirm it's really you — it's never stored on my end, promise!' Easy! 🌸",
+    resolutionMedium: "Okay so his SSN panic? Completely understandable — I'd feel the same way! First, validate that concern big time: 'That's a totally fair reaction, and honestly I hear this a lot — it means you're paying attention!' Then explain it's just to confirm he's the account holder before you can access anything, and the number is never, ever stored on your end. Then give him a little space to breathe and decide to move forward. You've got this! 🌸",
+    resolutionLong: "Three easy steps — you've so got this!\n\n1. Validate, and make it real: 'That's a completely understandable reaction — I hear this all the time, and honestly it shows you're looking out for yourself!'\n\n2. Explain clearly and warmly: 'We need it to confirm you're the account holder before we can access or change anything on your policy. It's never stored on my end — ever!'\n\n3. Hand the control back to him: 'And if you're still not comfortable, I can walk you through our other verification options!' Then pause — let him decide. No pressure, no rush! 🌸",
+  },
+  // Problem 1 — Call Recap
+  {
+    thinking: "Okay, scanning back through the call! Let me find what Dodge needed before all the verification excitement...",
+    why: "It's so easy to lose the thread after a verification detour — happens all the time! Dodge told you exactly what he needed at the very start of the call. A quick recap here makes sure nothing falls through the cracks before you dive in! 🌸",
+    resolutionShort: "Two things on Dodge's list today! Add his 2021 Ford F-150 XLT (plate IZN-7829) to the fleet, and check his Alaska travel coverage — he's hitting the road in two days! Let's get him all set! 🌸",
+    resolutionMedium: "Great news — you're all caught up! Here's what Dodge needs today:\n\n1. Add his new vehicle to the fleet — 2021 Ford F-150 XLT, plate IZN-7829, VIN ending 4821, silver, ~38,000 miles. Love a new truck!\n2. Crosscheck his Alaska travel compliance — he's leaving in two days and wants everything locked in before he goes!\n\nYou've totally got this! 🌸",
+    resolutionLong: "Okay, two things on the agenda — super doable!\n\n1. Add his new ride to the fleet — 2021 Ford F-150 XLT, plate IZN-7829, VIN ending 4821, silver, ~38,000 miles.\n2. Check Alaska travel compliance for his policy — he's driving up in two days!\n\nHead's up: Dodge mentioned the Alaska trip twice during the call, which tells you it's really time-sensitive for him. So once the vehicle is added, make that Alaska check your #1 priority. You've totally got this! 🌸",
+  },
+  // Problem 2 — Do I Need SRT?
+  {
+    thinking: "Okay, so Dodge is going to Alaska temporarily — not moving there! Let me check if this actually needs a full liability change or just a quick travel note... 🌸",
+    why: "Alaska's higher liability minimum is usually for vehicles that live there, not just visiting! Since Dodge is just passing through temporarily, a travel endorsement or trip notation is probably all that's needed — no coverage overhaul, no SRT drama! 🌸",
+    resolutionShort: "Wait — since he's visiting Alaska temporarily, he might not need a liability increase at all! Check if a short-term travel endorsement or trip notation covers the visit. That's usually the path for temporary out-of-state travel — no SRT, no coverage changes! 🌸",
+    resolutionMedium: "Good news — don't change anything yet! Dodge is visiting Alaska temporarily, not relocating, and Alaska's higher minimum usually applies to vehicles based there.\n\nFor a temporary trip, you can likely:\n• Add a short-term out-of-state travel endorsement\n• Note the trip dates and Alaska destination on the policy\n\nNo liability bump, no SRT — just a quick endorsement note and he's good to go! 🌸",
+    resolutionLong: "Hold on — don't adjust his coverage just yet! Dodge is visiting Alaska temporarily, and that changes everything! 🌸\n\nAlaska's $100K minimum is usually for vehicles permanently registered there. For a short trip, try:\n• Adding a temporary out-of-state travel endorsement\n• Noting the trip dates and Alaska destination on the policy\n• Confirming his existing coverage applies for the duration\n\nNo liability increase, no SRT call, no drama — just a quick endorsement notation and he's covered! Check your endorsement options first, but this is almost certainly the easier path! 🌸",
+  },
+  // Problem 3 — System Update / Call Dropped
+  {
+    thinking: "Oh no — the call just dropped! Let me check what was completed before the system update hit...",
+    why: "The system picked the worst possible moment to update — right before Mr. Toyota got his confirmation! But here's the good news: everything on his policy is actually done. He just doesn't know it yet! Since he's leaving tomorrow, a quick follow-up text or email will fix this completely. 🌸",
+    resolutionShort: "Already on it — follow-up email sent to Mr. Toyota! Confirmed his F-150 and Alaska endorsement are both active, apologized for the sudden disconnect, and included the estimated restoration time (20–30 min) plus your number. He's taken care of! 🌸",
+    resolutionMedium: "Done! I've already sent Mr. Toyota a follow-up email on your behalf so he's not left wondering:\n\nSubject: Your Progressive policy is all set — sorry for the dropped call! 🌸\n\nHi Mr. Toyota — so sorry the call got cut off! Just want you to know everything went through: your F-150 (IZN-7829) is on your fleet and your Alaska endorsement is active ✓. System should be back up in 20–30 minutes. Call [your direct number] anytime before your trip!\n\nHe'll be so relieved! 🌸",
+    resolutionLong: "Already handled! Here's what I sent and logged:\n\nEmail sent to Mr. Toyota:\n   • Warm apology for the surprise disconnect — totally not his fault!\n   • F-150 (plate IZN-7829) added to fleet ✓\n   • Alaska out-of-state endorsement active ✓\n   • System restoration estimated in 20–30 minutes\n   • Your direct callback number so he can reach you anytime\n\nCall log updated: 'System Disconnect — Follow-up Email Sent automatically by Helper Bot.' ✓\n\nOnce the system's back, a quick callback to say hi would be a lovely touch before his big trip! 🌸",
+  },
+];
+
+// ─── TONE PREFIXES FOR THINKING & WHY ────────────────────────────────────────
+const toneThinkingPrefix = {
+  formal:        '',
+  assertive:     'Quick assessment: ',
+  collaborative: "Here's what I'm seeing: ",
+  reflective:    'Taking a step back — ',
+};
+const toneWhyPrefix = {
+  formal:        '',
+  assertive:     'Bottom line: ',
+  collaborative: 'The reason this approach works: ',
+  reflective:    'Worth understanding the context here — ',
+};
+
+// ─── TONE OPENERS (per problem × tone) ───────────────────────────────────────
+const toneOpeners = [
+  { formal: '', assertive: 'Address this directly.', collaborative: 'This one is easy to navigate together.', reflective: 'His concern makes complete sense.' },
+  { formal: '', assertive: "Here's what you need to action.", collaborative: "Let's get back on track.", reflective: "It's easy to lose track after the verification detour." },
+  { formal: '', assertive: 'No liability change needed — check the endorsement route.', collaborative: "Good news — a temporary endorsement likely handles this.", reflective: 'The temporary nature of the trip changes the picture here.' },
+  { formal: '', assertive: 'Reach him before he leaves tomorrow.', collaborative: "Let's make sure he hears from you before his trip.", reflective: "He was almost done — a quick follow-up closes this out." },
+];
+
+// ─── BUILD DATA FROM DROPDOWNS ────────────────────────────────────────────────
+function getSelectedData() {
+  const tone     = document.getElementById('selTone').value;
+  const length   = document.getElementById('selLength').value;
+  const elements = document.getElementById('selElements').value;
+  const persona  = document.getElementById('selPersona').value;
+
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // Flo has her own voice baked in — she ignores tone openers
+  if (persona === 'flo') {
+    const flo = floData[currentProblem];
+    return {
+      persona,
+      tone:     { formal:'Formal', assertive:'Assertive', collaborative:'Collaborative', reflective:'Reflective' }[tone],
+      length:   { short:'Short', medium:'Medium', long:'Long' }[length],
+      elements: { resolution:'Resolution only', thinking:'Thinking + Resolution', all:'Thinking + Why + Resolution' }[elements],
+      thinking: (elements === 'thinking' || elements === 'all') ? flo.thinking : null,
+      why:      (elements === 'all') ? flo.why : null,
+      resolution: flo['resolution' + cap(length)],
+    };
+  }
+
+  const prob = problemData[currentProblem];
+  const baseResolution = prob['resolution' + cap(length)];
+  const opener = toneOpeners[currentProblem][tone];
+  const resolution = opener ? opener + ' ' + baseResolution : baseResolution;
+
+  const tp = toneThinkingPrefix[tone];
+  const wp = toneWhyPrefix[tone];
+
+  return {
+    persona,
+    tone:     { formal:'Formal', assertive:'Assertive', collaborative:'Collaborative', reflective:'Reflective' }[tone],
+    length:   { short:'Short', medium:'Medium', long:'Long' }[length],
+    elements: { resolution:'Resolution only', thinking:'Thinking + Resolution', all:'Thinking + Why + Resolution' }[elements],
+    thinking: (elements === 'thinking' || elements === 'all') ? (tp + prob.thinking) : null,
+    why:      (elements === 'all') ? (wp + prob.why) : null,
+    resolution,
+  };
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function init() {
+  renderTranscript();  // shows Start button (transcriptRevealed = 0, problem 0)
+  renderBanners();
+  switchVersion(0);
+  startTimer();
+}
+
+// ─── ORDER CONFIGS ────────────────────────────────────────────────────────────
+// tabOrders[i] = CSS flex `order` value assigned to vtab{i} (0=QA, 1=Chat, 2=Highlight)
+// firstTab     = which version index to activate first
+// buttonOrder  = indices into BUTTON_CONFIGS for left-to-right button sequence
+const BUTTON_CONFIGS = [
+  { emoji: '⚠️', label: 'System Issue',   cls: 'hover:bg-red-50 hover:border-red-300' },
+  { emoji: '🔁', label: 'Call Recap',      cls: 'hover:bg-yellow-50 hover:border-yellow-300' },
+  { emoji: '💙', label: 'Caller Concern',  cls: 'hover:bg-purple-50 hover:border-purple-300' },
+  { emoji: '📋', label: 'Do I Need SRT?', cls: 'hover:bg-blue-50 hover:border-blue-300' },
+];
+const ORDER_CONFIGS = [
+  // Order 1: Quick Action | Chat | Highlight  ·  System Issue | Call Recap | Caller Concern | Do I Need SRT?
+  { tabOrders: [0, 1, 2], firstTab: 0, buttonOrder: [0, 1, 2, 3] },
+  // Order 2: Chat | Highlight | Quick Action  ·  Caller Concern | Do I Need SRT? | System Issue | Call Recap
+  { tabOrders: [2, 0, 1], firstTab: 1, buttonOrder: [2, 3, 0, 1] },
+  // Order 3: Highlight | Quick Action | Chat  ·  Call Recap | System Issue | Do I Need SRT? | Caller Concern
+  { tabOrders: [1, 2, 0], firstTab: 2, buttonOrder: [1, 0, 3, 2] },
+];
+
+// Default output-style dropdown values per order (tone / length / elements / persona)
+const ORDER_DEFAULTS = [
+  { tone: 'formal',       length: 'medium', elements: 'resolution', persona: 'supervisor' },
+  { tone: 'collaborative', length: 'short', elements: 'thinking',   persona: 'flo'        },
+  { tone: 'assertive',    length: 'long',   elements: 'all',        persona: 'duck'       },
+];
+
+function applyOrder(n) {
+  const cfg = ORDER_CONFIGS[n];
+  // Set dropdown defaults for this order
+  const def = ORDER_DEFAULTS[n];
+  document.getElementById('selTone').value     = def.tone;
+  document.getElementById('selLength').value   = def.length;
+  document.getElementById('selElements').value = def.elements;
+  document.getElementById('selPersona').value  = def.persona;
+  // Reorder tabs visually via CSS flex order
+  cfg.tabOrders.forEach((cssOrder, tabIdx) => {
+    document.getElementById('vtab' + tabIdx).style.order = cssOrder;
+  });
+  // Rebuild quick-action buttons in the new sequence
+  const container = document.getElementById('v1Buttons');
+  container.innerHTML = cfg.buttonOrder.map(i => {
+    const b = BUTTON_CONFIGS[i];
+    return `<button onclick="triggerV1()" class="flex-1 text-xs px-2 py-2 border border-gray-200 rounded ${b.cls}">${b.emoji} ${b.label}</button>`;
+  }).join('');
+  // Activate the first tab of this order
+  switchVersion(cfg.firstTab);
+}
+
+function beginStudy(orderIdx) {
+  applyOrder(orderIdx);
+  const overlay = document.getElementById('intro-overlay');
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.style.display = 'none', 300);
+}
+
+// ─── TIMER ────────────────────────────────────────────────────────────────────
+let secs = 3*60+12;
+function startTimer() {
+  setInterval(() => {
+    secs++;
+    const m = String(Math.floor(secs/60)).padStart(2,'0');
+    const s = String(secs%60).padStart(2,'0');
+    document.getElementById('callTimer').textContent = `00:${m}:${s}`;
+  }, 1000);
+}
+
+// ─── INCREMENTAL SUMMARY DATA ─────────────────────────────────────────────────
+// atLine: after this line index is revealed, update the summary to text
+// Summaries accumulate across the whole call — each entry appends below the last.
+// Fewer, chunkier triggers; narrative paragraph style; no alerts or instructions.
+const summaryUpdates = [
+  // Problem 0 — Caller Concern
+  [
+    { atLine: 3, text: "Dodge Toyota called in about two things: adding a new vehicle to his commercial auto fleet, and making sure his policy covers an upcoming trip to Alaska. He's leaving soon and wants everything confirmed before he goes." },
+    { atLine: 6, text: "Verification slowed down when the customer pushed back on the SSN request, uncertain why it was needed." },
+  ],
+  // Problem 1 — Call Recap
+  [
+    { atLine: 5, text: "After verification completed, Mr. Toyota provided details for the vehicle he wants added — a 2021 Ford F-150 XLT, silver, plate IZN-7829, around 38,000 miles." },
+    { atLine: 7, text: "He stressed that the Alaska coverage check is time-sensitive, as he is leaving in two days." },
+  ],
+  // Problem 2 — Do I Need SRT?
+  [
+    { atLine: 3, text: "The F-150 was added to the fleet. Alaska state minimums require $100K liability for out-of-state policies, while Mr. Toyota's shows $50K — though the trip is temporary, which may change the approach." },
+    { atLine: 6, text: "The specialist explored whether a temporary travel endorsement or trip notation could cover the Alaska visit without modifying the policy's liability limits or involving SRT." },
+  ],
+  // Problem 3 — System Update / Call Dropped
+  [
+    { atLine: 2, text: "The call was wrapping up with all changes complete — F-150 added to fleet and Alaska endorsement applied." },
+    { atLine: 4, text: "A sudden system update interrupted the call mid-sentence, disconnecting the customer before any confirmation was sent. The specialist was unable to reach Mr. Toyota by callback. He is leaving tomorrow morning." },
+  ],
+];
+
+// ─── PROBLEM STEPS ────────────────────────────────────────────────────────────
+function renderProblemSteps() {
+  const container = document.getElementById('problemSteps');
+  container.innerHTML = '';
+  problemLabels.forEach((label, i) => {
+    let cls = 'text-xs px-3 py-1 rounded-full font-medium ';
+    if (i < currentProblem)      cls += 'bg-green-500 text-white';
+    else if (i === currentProblem) cls += 'bg-blue-600 text-white';
+    else                          cls += 'bg-gray-200 text-gray-500';
+    container.innerHTML += `<span class="${cls}">${i+1} · ${label}</span>`;
+  });
+}
+
+function prevProblem() {
+  if (currentProblem > 0) {
+    transcriptAnimating = false;
+    currentProblem--;
+    // Going back: show all lines instantly
+    transcriptRevealed = transcripts[currentProblem].length;
+    renderTranscript();
+    renderBanners();
+    resetAllPanels();
+    v3Selected = [];
+    updateV3Bottom();
+    // Rebuild all accumulated summary entries for this problem
+    rebuildSummary(currentProblem);
+    // Profile is always visible when going back (all lines shown instantly)
+    document.getElementById('customerProfile').classList.remove('hidden');
+  }
+}
+
+function nextProblem() {
+  if (currentProblem < 3) {
+    transcriptAnimating = false;
+    currentProblem++;
+    transcriptRevealed = 0;
+    renderBanners();
+    resetAllPanels();
+    v3Selected = [];
+    updateV3Bottom();
+    // Wipe transcript and begin animation — summary keeps accumulating
+    document.getElementById('transcriptContainer').innerHTML = '';
+    animateTranscript();
+  }
+}
+
+// ─── BANNERS ──────────────────────────────────────────────────────────────────
+function renderBanners() {
+  ['v1Banner','v2Banner','v3Banner'].forEach(id => {
+    const el = document.getElementById(id);
+    el.textContent = bannerText[currentProblem];
+    el.className = `px-4 py-2 text-xs border-b flex-shrink-0 ${bannerStyles[currentProblem]}`;
+  });
+}
+
+// ─── TRANSCRIPT ───────────────────────────────────────────────────────────────
+function appendTranscriptLine(container, line) {
+  const div = document.createElement('div');
+  div.className = 'transcript-line fade-in' + (currentVersion === 2 ? ' v3-mode' : '');
+  div.dataset.text = `[${line.t}] ${line.who}: ${line.text}`;
+  div.dataset.id = line.t + line.who;
+
+  const isSystem = line.isSystem;
+  const isSpec = line.who === 'Specialist';
+  const speakerColor = isSystem ? 'text-red-600' : isSpec ? 'text-blue-700' : 'text-gray-600';
+  const bg = isSystem ? 'bg-red-50' : (line.hint && currentVersion !== 2 ? 'bg-yellow-50' : '');
+
+  div.innerHTML = `
+    <div class="flex gap-2 items-start ${bg} rounded px-1 py-0.5">
+      <span class="text-gray-400 text-xs font-mono flex-shrink-0 mt-0.5">${line.t}</span>
+      <div class="flex-1 min-w-0">
+        <span class="text-xs font-semibold ${speakerColor}">${line.who}</span>
+        <span class="text-xs text-gray-600 ml-1">${line.text}</span>
+      </div>
+    </div>`;
+
+  if (currentVersion === 2) {
+    div.addEventListener('click', () => toggleV3Line(div, line));
+  }
+  container.appendChild(div);
+}
+
+function renderTranscript() {
+  const container = document.getElementById('transcriptContainer');
+  container.innerHTML = '';
+
+  // Problem 0 before Start is clicked → show Start button
+  if (currentProblem === 0 && transcriptRevealed === 0) {
+    container.innerHTML = `<div class="flex items-center justify-center h-full">
+      <button onclick="startTranscript()" class="px-5 py-2.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors">▶ Start</button>
+    </div>`;
+    return;
+  }
+
+  // Render only the lines revealed so far
+  const lines = transcripts[currentProblem];
+  const count = Math.min(transcriptRevealed, lines.length);
+  for (let i = 0; i < count; i++) {
+    appendTranscriptLine(container, lines[i]);
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+function startTranscript() {
+  // Called only for Problem 0 via the Start button
+  document.getElementById('transcriptContainer').innerHTML = '';
+  animateTranscript();
+}
+
+function animateTranscript() {
+  if (transcriptAnimating) return;
+  transcriptAnimating = true;
+  const prob = currentProblem;
+  const lines = transcripts[prob];
+  const container = document.getElementById('transcriptContainer');
+
+  function showNext() {
+    // Stop if problem changed or animation cancelled
+    if (!transcriptAnimating || currentProblem !== prob) {
+      transcriptAnimating = false;
+      return;
+    }
+    if (transcriptRevealed >= lines.length) {
+      transcriptAnimating = false;
+      // Reveal customer profile after Problem 0 finishes
+      if (prob === 0) document.getElementById('customerProfile').classList.remove('hidden');
+      return;
+    }
+
+    appendTranscriptLine(container, lines[transcriptRevealed]);
+    container.scrollTop = container.scrollHeight;
+
+    // Check if any summary update triggers at this line index
+    const update = summaryUpdates[prob].find(u => u.atLine === transcriptRevealed);
+    if (update) animateSummary(update.text);
+
+    transcriptRevealed++;
+    setTimeout(showNext, 950);
+  }
+
+  showNext();
+}
+
+function animateSummary(text) {
+  const el = document.getElementById('callSummary');
+  // Remove the initial placeholder if still present
+  const placeholder = el.querySelector('span.italic');
+  if (placeholder) placeholder.remove();
+  // Append new entry with a divider if entries already exist
+  const entry = document.createElement('p');
+  entry.className = 'fade-in';
+  entry.textContent = text;
+  if (el.children.length > 0) {
+    entry.style.cssText = 'margin-top:6px;padding-top:6px;border-top:1px solid #e5e7eb';
+  }
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearSummary() {
+  const el = document.getElementById('callSummary');
+  el.innerHTML = '<span class="text-gray-400 italic">Call in progress — awaiting transcript.</span>';
+}
+
+function rebuildSummary(upToProbIdx) {
+  const el = document.getElementById('callSummary');
+  el.innerHTML = '';
+  for (let p = 0; p <= upToProbIdx; p++) {
+    summaryUpdates[p].forEach(u => {
+      const entry = document.createElement('p');
+      entry.textContent = u.text;
+      if (el.children.length > 0) entry.style.cssText = 'margin-top:6px;padding-top:6px;border-top:1px solid #e5e7eb';
+      el.appendChild(entry);
+    });
+  }
+  if (!el.children.length) {
+    el.innerHTML = '<span class="text-gray-400 italic">Call in progress — awaiting transcript.</span>';
+  }
+  el.scrollTop = el.scrollHeight;
+}
+
+// ─── VERSION SWITCHING ────────────────────────────────────────────────────────
+function switchVersion(v) {
+  currentVersion = v;
+  for (let i = 0; i < 3; i++) {
+    const tab = document.getElementById(`vtab${i}`);
+    const panel = document.getElementById(`panel${i}`);
+    if (i === v) {
+      tab.className = 'px-4 py-2 text-sm font-medium rounded-t border border-b-0 bg-blue-600 text-white border-blue-600 mr-1';
+      panel.classList.remove('hidden');
+      panel.classList.add('flex');
+    } else {
+      tab.className = 'px-4 py-2 text-sm font-medium rounded-t border border-b-0 bg-white text-gray-600 border-gray-200 mr-1';
+      panel.classList.add('hidden');
+      panel.classList.remove('flex');
+    }
+  }
+
+  // V3 highlight mode in transcript
+  const badge = document.getElementById('highlightBadge');
+  if (v === 2) {
+    badge.classList.remove('hidden');
+    document.querySelectorAll('.transcript-line').forEach(el => {
+      el.classList.add('v3-mode');
+      el.onclick = null; // re-set below
+    });
+    // Re-attach V3 click handlers
+    renderTranscript();
+  } else {
+    badge.classList.add('hidden');
+    document.querySelectorAll('.transcript-line').forEach(el => el.classList.remove('v3-mode'));
+    renderTranscript();
+  }
+}
+
+// ─── RESET ────────────────────────────────────────────────────────────────────
+function resetAllPanels() {
+  // V1
+  document.getElementById('v1ResponseArea').innerHTML = `
+    <div class="flex flex-col items-center justify-center h-full text-gray-400">
+      <div class="text-3xl mb-2">🤖</div>
+      <p class="text-sm font-medium text-gray-500">AI reads call context automatically.</p>
+      <p class="text-xs text-gray-400 mt-1">Select a support type below to get help.</p>
+    </div>`;
+  document.getElementById('v1Input').value = '';
+
+  // V2
+  document.getElementById('v2ChatArea').innerHTML = '';
+  document.getElementById('v2Input').value = '';
+
+  // V3
+  document.getElementById('v3ResponseArea').innerHTML = `
+    <div class="flex flex-col items-center justify-center h-full text-gray-400">
+      <div class="text-3xl mb-2">✏️</div>
+      <p class="text-sm font-medium text-gray-500">Highlight transcript lines to get help.</p>
+      <p class="text-xs text-gray-400 mt-1">Click lines in the transcript on the left, then ask for support.</p>
+    </div>`;
+  document.getElementById('v3Input').value = '';
+  v3Selected = [];
+  updateV3Bottom();
+
+  thinking = false;
+}
+
+// ─── RESPONSE RENDERING ───────────────────────────────────────────────────────
+const STEPS_HTML = `<details class="group">
+  <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none flex items-center gap-1.5 list-none">
+    <span class="inline-block transition-transform duration-150 group-open:rotate-90 text-gray-300 text-[10px]">▶</span>
+    <span>How I got here</span>
+  </summary>
+  <div class="mt-1.5 space-y-1 pl-3 border-l border-gray-100 ml-1">
+    <div class="flex items-center gap-1.5 text-xs text-gray-400"><span class="text-green-500">✓</span>Voice transcription analyzed</div>
+    <div class="flex items-center gap-1.5 text-xs text-gray-400"><span class="text-green-500">✓</span>Customer profile loaded</div>
+    <div class="flex items-center gap-1.5 text-xs text-gray-400"><span class="text-green-500">✓</span>Database accessed</div>
+    <div class="flex items-center gap-1.5 text-xs text-gray-400"><span class="text-green-500">✓</span>Response generated</div>
+  </div>
+</details>`;
+
+function buildResponseHTML(data, highlights) {
+  const p = personas[data.persona];
+  let html = `<div class="fade-in bg-white border border-gray-200 rounded-lg p-4 space-y-3">`;
+
+  // Persona row — no type tags
+  html += `<div class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0" style="background:${p.color}">${p.icon}</div>
+    <span class="text-sm font-semibold text-gray-700">${p.label}</span>
+  </div>`;
+
+  // Highlights (V3 only)
+  if (highlights && highlights.length) {
+    html += `<div class="bg-blue-50 border border-blue-100 rounded p-2">
+      <p class="text-xs text-blue-500 font-medium mb-1">Based on your highlights:</p>
+      ${highlights.map(h => `<p class="text-xs text-blue-700">${esc(h)}</p>`).join('')}
+    </div>`;
+  }
+
+  // Thinking
+  if (data.thinking) {
+    html += `<div class="bg-gray-50 border border-gray-200 rounded p-2.5">
+      <p class="text-xs text-gray-400 font-medium mb-1">Thinking...</p>
+      <p class="text-xs text-gray-500 italic leading-relaxed">${esc(data.thinking)}</p>
+    </div>`;
+  }
+
+  // Why
+  if (data.why) {
+    html += `<div class="bg-amber-50 border border-amber-200 rounded p-2.5">
+      <p class="text-xs text-amber-600 font-medium mb-1">Why this resolution</p>
+      <p class="text-xs text-amber-800 leading-relaxed">${esc(data.why)}</p>
+    </div>`;
+  }
+
+  // Resolution
+  html += `<div class="text-xs text-gray-800 leading-relaxed whitespace-pre-line">${esc(data.resolution)}</div>`;
+
+  // Collapsed steps
+  html += STEPS_HTML;
+
+
+  html += `</div>`;
+  return html;
+}
+
+function buildThinkingHTML() {
+  return `<div class="flex items-center gap-2 p-3">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    <span class="text-xs text-gray-400">Reading call context...</span>
+  </div>`;
+}
+
+// ─── V1 ───────────────────────────────────────────────────────────────────────
+function triggerV1() {
+  if (thinking) return;
+  thinking = true;
+  const area = document.getElementById('v1ResponseArea');
+  area.innerHTML = `<div id="v1Thinking" class="p-4">
+    <p class="text-xs text-gray-500 mb-2 font-medium">Reading call context...</p>
+    <div class="space-y-1.5 text-xs text-gray-400" id="v1Steps"></div>
+  </div>`;
+
+  const steps = [
+    'Voice transcription analyzed',
+    'Customer profile loaded',
+    'Database accessed',
+    'Generating response...'
+  ];
+  let delay = 0;
+  steps.forEach((step, i) => {
+    delay += 180;
+    setTimeout(() => {
+      const stepsEl = document.getElementById('v1Steps');
+      if (stepsEl) stepsEl.innerHTML += `<div class="flex items-center gap-1.5"><span class="text-green-500">✓</span>${step}</div>`;
+      if (i === steps.length - 1) {
+        setTimeout(() => {
+          const data = getSelectedData();
+          area.innerHTML = buildResponseHTML(data, null);
+          thinking = false;
+        }, 200);
+      }
+    }, delay);
+  });
+}
+
+function regenCurrent() {
+  if (currentVersion === 0) triggerV1();
+  else if (currentVersion === 1) { document.getElementById('v2Input').value = 'Regenerate'; sendV2(); }
+  else sendV3();
+}
+
+// ─── V2 ───────────────────────────────────────────────────────────────────────
+function sendV2() {
+  const input = document.getElementById('v2Input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (thinking) return;
+  thinking = true;
+  input.value = '';
+
+  const chatArea = document.getElementById('v2ChatArea');
+
+  // Hide placeholder
+  const ph = document.getElementById('v2Placeholder');
+  if (ph) ph.remove();
+
+  // User bubble
+  chatArea.innerHTML += `<div class="flex justify-end fade-in">
+    <div class="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-3 py-2 max-w-xs text-xs">${esc(text)}</div>
+  </div>`;
+  chatArea.scrollTop = chatArea.scrollHeight;
+
+  // Thinking
+  const thinkId = 'think_' + Date.now();
+  chatArea.innerHTML += `<div id="${thinkId}" class="flex justify-start fade-in">
+    <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+  </div>`;
+  chatArea.scrollTop = chatArea.scrollHeight;
+
+  setTimeout(() => {
+    const thinkEl = document.getElementById(thinkId);
+    if (thinkEl) thinkEl.remove();
+    const data = getSelectedData();
+    const p = personas[data.persona];
+
+    let msgContent = '';
+    if (data.thinking) msgContent += `<div class="bg-gray-50 rounded p-2 mb-2"><p class="text-xs text-gray-400 italic leading-relaxed">${esc(data.thinking)}</p></div>`;
+    if (data.why) msgContent += `<div class="bg-amber-50 rounded p-2 mb-2"><p class="text-xs text-amber-600 font-medium mb-1">Why this resolution</p><p class="text-xs text-amber-800 leading-relaxed">${esc(data.why)}</p></div>`;
+    msgContent += `<p class="text-xs text-gray-800 leading-relaxed whitespace-pre-line">${esc(data.resolution)}</p>`;
+
+    chatArea.innerHTML += `<div class="flex justify-start gap-2 fade-in">
+      <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 mt-1" style="background:${p.color}">${p.icon}</div>
+      <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-3 py-2.5 max-w-sm">
+        <p class="text-xs font-semibold text-gray-600 mb-1.5">${p.label}</p>
+        ${msgContent}
+        <div class="mt-2">${STEPS_HTML}</div>
+      </div>
+    </div>`;
+    chatArea.scrollTop = chatArea.scrollHeight;
+    thinking = false;
+  }, 2200);
+}
+
+// ─── V3 ───────────────────────────────────────────────────────────────────────
+function toggleV3Line(div, line) {
+  const key = line.t + line.who;
+  const idx = v3Selected.findIndex(s => s.key === key);
+  if (idx > -1) {
+    v3Selected.splice(idx, 1);
+    div.classList.remove('selected');
+  } else {
+    v3Selected.push({ key, text: `[${line.t}] ${line.who}: ${line.text}` });
+    div.classList.add('selected');
+  }
+  updateV3Bottom();
+}
+
+function updateV3Bottom() {
+  const empty = document.getElementById('v3BottomEmpty');
+  const selected = document.getElementById('v3BottomSelected');
+  const textEl = document.getElementById('v3SelectedText');
+  if (v3Selected.length > 0) {
+    empty.classList.add('hidden');
+    selected.classList.remove('hidden');
+    textEl.innerHTML = v3Selected.map(s => esc(s.text)).join('<br>');
+  } else {
+    empty.classList.remove('hidden');
+    selected.classList.add('hidden');
+  }
+}
+
+function sendV3() {
+  if (v3Selected.length === 0 || thinking) return;
+  thinking = true;
+  const highlights = v3Selected.map(s => s.text);
+
+  const area = document.getElementById('v3ResponseArea');
+  area.innerHTML = `<div id="v3Thinking" class="p-4">
+    <p class="text-xs text-gray-500 mb-2 font-medium">Reading call context...</p>
+    <div class="space-y-1.5 text-xs text-gray-400" id="v3Steps"></div>
+  </div>`;
+
+  const steps = [
+    'Voice transcription analyzed',
+    'Customer profile loaded',
+    'Database accessed',
+    'Response generated'
+  ];
+  let delay = 0;
+  steps.forEach((step, i) => {
+    delay += 180;
+    setTimeout(() => {
+      const stepsEl = document.getElementById('v3Steps');
+      if (stepsEl) stepsEl.innerHTML += `<div class="flex items-center gap-1.5"><span class="text-green-500">✓</span>${step}</div>`;
+      if (i === steps.length - 1) {
+        setTimeout(() => {
+          const data = getSelectedData();
+          area.innerHTML = buildResponseHTML(data, highlights);
+          thinking = false;
+        }, 200);
+      }
+    }, delay);
+  });
+}
+
+function clearV3() {
+  v3Selected = [];
+  document.querySelectorAll('.transcript-line.selected').forEach(el => el.classList.remove('selected'));
+  updateV3Bottom();
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function esc(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+init();
+</script>
+</body>
+</html>
