@@ -140,7 +140,7 @@
         </select>
       </label>
       <div class="ml-auto flex-shrink-0">
-        <button onclick="regenCurrent()" class="text-xs px-3 py-1.5 border border-gray-200 rounded bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors">↺ Regenerate</button>
+        <button id="regenBtn" onclick="regenCurrent()" class="hidden text-xs px-3 py-1.5 border border-gray-200 rounded bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors">↺ Regenerate</button>
       </div>
     </div>
 
@@ -226,6 +226,7 @@ let v3Selected = [];
 let thinking = false;
 let transcriptRevealed = 0;   // lines revealed for current problem
 let transcriptAnimating = false;
+let versionUsed = [false, false, false]; // tracks if each version has outputted at least once
 
 // ─── PROBLEM META ─────────────────────────────────────────────────────────────
 const problemLabels = ['Caller Concern', 'Call Recap', 'Do I Need SRT?', 'System Issue'];
@@ -732,6 +733,11 @@ function switchVersion(v) {
     }
   }
 
+  // Sync Regenerate button visibility for the newly active version
+  const btn = document.getElementById('regenBtn');
+  if (versionUsed[v]) btn.classList.remove('hidden');
+  else btn.classList.add('hidden');
+
   // V3 highlight mode in transcript
   const badge = document.getElementById('highlightBadge');
   if (v === 2) {
@@ -774,6 +780,10 @@ function resetAllPanels() {
   document.getElementById('v3Input').value = '';
   v3Selected = [];
   updateV3Bottom();
+
+  // Reset per-version usage and hide Regenerate
+  versionUsed = [false, false, false];
+  document.getElementById('regenBtn').classList.add('hidden');
 
   thinking = false;
 }
@@ -871,10 +881,16 @@ function triggerV1() {
           const data = getSelectedData();
           area.innerHTML = buildResponseHTML(data, null);
           thinking = false;
+          markVersionUsed(0);
         }, 200);
       }
     }, delay);
   });
+}
+
+function markVersionUsed(v) {
+  versionUsed[v] = true;
+  if (currentVersion === v) document.getElementById('regenBtn').classList.remove('hidden');
 }
 
 function regenCurrent() {
@@ -934,6 +950,7 @@ function sendV2() {
     </div>`;
     chatArea.scrollTop = chatArea.scrollHeight;
     thinking = false;
+    markVersionUsed(1);
   }, 2200);
 }
 
@@ -993,6 +1010,7 @@ function sendV3() {
           const data = getSelectedData();
           area.innerHTML = buildResponseHTML(data, highlights);
           thinking = false;
+          markVersionUsed(2);
         }, 200);
       }
     }, delay);
