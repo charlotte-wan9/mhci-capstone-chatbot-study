@@ -9,6 +9,35 @@
   @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-4px)} }
   .dot { display:inline-block; width:6px; height:6px; background:#9ca3af; border-radius:50%; animation:bounce 1.2s infinite; margin:0 2px; }
   .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
+  /* darker pulse — used for the Since field */
+  @keyframes tenurePulse {
+    0%   { background:transparent; box-shadow:0 0 0 0 rgba(234,179,8,0);   }
+    12%  { background:#fde047;     box-shadow:0 0 0 6px rgba(234,179,8,.5); }
+    28%  { background:#fef9c3;     box-shadow:0 0 0 0 rgba(234,179,8,0);   }
+    44%  { background:#fde047;     box-shadow:0 0 0 6px rgba(234,179,8,.5); }
+    60%  { background:#fef9c3;     box-shadow:0 0 0 0 rgba(234,179,8,0);   }
+    76%  { background:#fde047;     box-shadow:0 0 0 6px rgba(234,179,8,.5); }
+    100% { background:#fde047;     box-shadow:0 0 0 0 rgba(234,179,8,0);   }
+  }
+  /* lighter pulse — used for the call-recap transcript line */
+  @keyframes tenurePulseLight {
+    0%   { background:transparent; box-shadow:0 0 0 0 rgba(250,204,21,0);   }
+    12%  { background:#fef08a;     box-shadow:0 0 0 6px rgba(250,204,21,.35);}
+    28%  { background:#fefce8;     box-shadow:0 0 0 0 rgba(250,204,21,0);   }
+    44%  { background:#fef08a;     box-shadow:0 0 0 6px rgba(250,204,21,.35);}
+    60%  { background:#fefce8;     box-shadow:0 0 0 0 rgba(250,204,21,0);   }
+    76%  { background:#fef08a;     box-shadow:0 0 0 6px rgba(250,204,21,.35);}
+    100% { background:#fef08a;     box-shadow:0 0 0 0 rgba(250,204,21,0);   }
+  }
+  /* pulse animation (the flashy part); JS swaps to .tenure-held when it ends */
+  .tenure-pulse { animation:tenurePulse 3.2s ease-in-out forwards; }
+  /* persistent yellow highlight that stays after the pulse finishes */
+  .tenure-held { background:#fde047; }
+  /* Since field gets the bolder treatment; transcript line keeps its own text colors */
+  #sinceField.tenure-pulse, #sinceField.tenure-held { font-weight:600; }
+  /* transcript-line variant: lighter yellow, no weight/color change so the speaker label stays as-is */
+  .transcript-line.tenure-pulse { animation:tenurePulseLight 3.2s ease-in-out forwards; }
+  .transcript-line.tenure-held { background:#fef08a; }
   .transcript-line { padding:4px 6px; border-radius:4px; cursor:pointer; }
   .transcript-line:hover { background:#eff6ff; }
   /* selected — default blue, then type-specific overrides */
@@ -40,6 +69,10 @@
   details > summary::-webkit-details-marker { display: none; }
   details[open] summary .arrow { transform: rotate(180deg); }
   .arrow { display:inline-block; transition: transform 0.15s; }
+  /* solution bullets: tag column sizes to the widest tag, so all text left-aligns */
+  .solution-grid { display:grid; grid-template-columns:max-content 1fr; column-gap:.625rem; row-gap:.625rem; align-items:start; }
+  .solution-grid > li { display:contents; }
+  .solution-grid > li > .sol-tag { justify-self:start; }
 </style>
 </head>
 <body class="bg-gray-100 h-screen overflow-hidden flex flex-col">
@@ -68,6 +101,7 @@
     <span class="text-xs text-gray-400 font-mono" id="callTimer">00:03:12</span>
   </div>
   <div class="flex-1"></div>
+  <button onclick="restartProblem()" title="Clear everything and replay this problem from the top" class="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 mr-1">↻ Restart</button>
   <button onclick="prevProblem()" class="text-xs px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">← Prev Problem</button>
   <button onclick="nextProblem()" class="text-xs px-3 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-800">Next Problem →</button>
 </div>
@@ -96,7 +130,7 @@
             <div><span class="text-gray-400">Policy: </span><span class="text-gray-700">P123457P854-922</span></div>
             <div><span class="text-gray-400">Coverage: </span><span class="text-gray-700">$50K Liability</span></div>
             <div><span class="text-gray-400">Vehicles: </span><span class="text-gray-700">2 on policy</span></div>
-            <div><span class="text-gray-400">Since: </span><span class="text-gray-700">Jan 2021</span></div>
+            <div><span class="text-gray-400">Since: </span><span id="sinceField" class="text-gray-700 rounded px-0.5">Jan 2021</span></div>
           </div>
         </div>
       </div>
@@ -113,7 +147,7 @@
     <!-- Transcript Section -->
     <div id="transcriptSection" class="flex flex-col flex-1 overflow-hidden border-b border-gray-100">
       <div class="flex items-center gap-2 px-3 pt-2.5 pb-1.5 flex-shrink-0">
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Live Transcript <span class="font-normal normal-case">· Last 10 exchanges</span></p>
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Live Transcript</p>
         <span class="ml-auto text-[10px] bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full whitespace-nowrap">✏ Click to select</span>
       </div>
       <div id="transcriptContainer" class="flex-1 overflow-y-auto px-3 pb-3 space-y-0.5"></div>
@@ -123,16 +157,6 @@
 
   <!-- RIGHT PANEL -->
   <div class="flex-1 flex flex-col overflow-hidden bg-gray-50">
-
-    <!-- Version Tabs -->
-    <div class="bg-white border-b border-gray-200 flex items-end px-4 pt-2">
-      <button id="vtab0" onclick="switchVersion(0)" class="px-4 py-2 text-sm font-medium rounded-t border border-b-0 mr-1">Version 1</button>
-      <button id="vtab1" onclick="switchVersion(1)" class="px-4 py-2 text-sm font-medium rounded-t border border-b-0 mr-1">Version 2</button>
-      <button id="vtab2" onclick="switchVersion(2)" class="px-4 py-2 text-sm font-medium rounded-t border border-b-0">Version 3</button>
-    </div>
-
-    <!-- Problem Banner -->
-    <div id="problemBanner" class="px-4 py-2 text-sm border-b flex-shrink-0"></div>
 
     <!-- Response Area -->
     <div id="responseArea" class="flex-1 overflow-y-auto p-4">
@@ -144,20 +168,17 @@
     </div>
 
     <!-- Bottom: nothing selected -->
-    <div id="bottomEmpty" class="border-t border-gray-200 bg-white p-3 flex-shrink-0">
-      <p class="text-xs text-gray-400 italic mb-1.5">⚠ Consider double-checking AI answers. Supported: Caller Concern · Call Recap · Do I Need SRT? · System Issue.</p>
-      <p class="text-sm text-gray-400 text-center py-0.5">← Click transcript lines to select context</p>
-    </div>
-
-    <!-- Bottom: lines selected -->
-    <div id="bottomSelected" class="hidden border-t border-gray-200 bg-white p-3 flex-shrink-0">
-      <p class="text-xs text-gray-400 italic mb-1.5">⚠ Consider double-checking AI answers. Supported: Caller Concern · Call Recap · Do I Need SRT? · System Issue.</p>
-      <p class="text-sm text-gray-500 font-medium mb-1">Selected context:</p>
-      <div id="selectedText" class="text-sm bg-blue-50 text-blue-800 rounded p-2 mb-2 italic max-h-16 overflow-y-auto"></div>
+    <!-- Bottom: always visible -->
+    <div id="bottomPanel" class="border-t border-gray-200 bg-white p-3 flex-shrink-0">
+      <p class="text-xs text-gray-400 italic mb-1.5">⚠ Consider double-checking AI answers. Supported: Caller Concern · Call Recap · System Issue.</p>
+      <div id="selectedContext" class="hidden mb-2">
+        <p class="text-sm text-gray-500 font-medium mb-1">Selected context:</p>
+        <div id="selectedText" class="text-sm bg-blue-50 text-blue-800 rounded p-2 italic max-h-16 overflow-y-auto"></div>
+      </div>
       <div class="flex gap-2">
-        <input id="highlightInput" type="text" placeholder="Add a note or ask directly..." class="flex-1 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400" onkeydown="if(event.key==='Enter')askHelperBot()" />
-        <button onclick="askHelperBot()" class="px-3 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 transition-colors whitespace-nowrap">Ask Helper Bot</button>
-        <button onclick="clearSelection()" class="px-3 py-2 border border-gray-200 text-gray-500 rounded text-sm hover:bg-gray-50">Clear</button>
+        <input id="highlightInput" type="text" placeholder="Ask Helper Bot a question..." class="flex-1 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400" oninput="maybeHighlightRecapSource()" onkeydown="if(event.key==='Enter')askHelperBot()" />
+        <button onclick="askHelperBot()" class="px-3 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 transition-colors whitespace-nowrap">Ask</button>
+        <button id="clearBtn" onclick="clearSelection()" class="hidden px-3 py-2 border border-gray-200 text-gray-500 rounded text-sm hover:bg-gray-50">Clear</button>
       </div>
     </div>
 
@@ -177,24 +198,11 @@ let transcriptRevealed = 0;
 let transcriptAnimating = false;
 
 // ─── BANNER DATA ──────────────────────────────────────────────────────────────
-const bannerText = [
-  '💙 Problem 1 of 4: The customer is pushing back on the SSN request during security verification.',
-  '🔁 Problem 2 of 4: Security verification is complete. You need a reminder of what the customer wanted.',
-  '📋 Problem 3 of 4: You\'ve hit a potential Alaska regulation issue and aren\'t sure if you need to escalate.',
-  '⚡ Problem 4 of 4: A sudden system update cut off the call. The customer is unreachable and has no confirmation of his policy changes.'
-];
-const bannerStyles = [
-  'bg-purple-50 text-purple-800 border-purple-100',
-  'bg-yellow-50 text-yellow-800 border-yellow-100',
-  'bg-blue-50 text-blue-800 border-blue-100',
-  'bg-red-50 text-red-800 border-red-100'
-];
 
 // ─── TOOLTIP TYPE STYLES ──────────────────────────────────────────────────────
 const TYPE_THEME = {
   'Caller Concern': { bg:'#7e22ce', text:'#fff', arrow:'#7e22ce' },
   'Call Recap':     { bg:'#b45309', text:'#fff', arrow:'#b45309' },
-  'Do I Need SRT?': { bg:'#1d4ed8', text:'#fff', arrow:'#1d4ed8' },
   'System Issue':   { bg:'#b91c1c', text:'#fff', arrow:'#b91c1c' },
 };
 
@@ -217,24 +225,15 @@ const transcripts = [
     {t:'10:06', who:'Specialist', text:"No worries at all, Mr. Toyota. Security verified — thank you for your patience."},
     {t:'10:07', who:'Specialist', text:"So just to make sure I have everything right for you today...", type:'Call Recap'},
     {t:'10:07', who:'Customer',   text:"Yes — exactly. Can we please get started?"},
+  ],
+  // Problem 2 — System Issue
+  [
     {t:'10:08', who:'Specialist', text:"Of course! Could you give me the license plate of the vehicle you'd like to add?", type:'Call Recap'},
     {t:'10:08', who:'Customer',   text:"It's IZN-7829. It's a 2021 Ford F-150 XLT, four-door pickup, VIN ending in 4821, silver, about 38,000 miles.", type:'Call Recap'},
     {t:'10:09', who:'Specialist', text:"Got it, let me get that entered for you now."},
     {t:'10:10', who:'Customer',   text:"And don't forget about the Alaska part — I leave in two days.", type:'Call Recap'},
-  ],
-  // Problem 2 — Do I Need SRT?
-  [
-    {t:'10:11', who:'Specialist', text:"Alright, the 2021 Ford F-150 has been added to your fleet. Now let me check your policy for Alaska compliance.", type:'Do I Need SRT?'},
+    {t:'10:11', who:'Specialist', text:"Alright, the 2021 Ford F-150 has been added to your fleet. Now let me check your policy for Alaska compliance."},
     {t:'10:12', who:'Customer',   text:"Great. Do you think there will be any issues?"},
-    {t:'10:12', who:'Specialist', text:"Let me pull up Alaska's state requirements for your policy type...", type:'Do I Need SRT?'},
-    {t:'10:13', who:'Specialist', text:"I'm seeing that Alaska requires a minimum $100,000 liability for personal auto policies operating out-of-state. Your current coverage is $50,000.", type:'Do I Need SRT?'},
-    {t:'10:13', who:'Customer',   text:"Is that going to be a problem? I thought I was fully covered."},
-    {t:'10:14', who:'Specialist', text:"There's a coverage gap for Alaska travel. I want to make sure I handle this correctly...", type:'Do I Need SRT?'},
-    {t:'10:14', who:'Specialist', text:"I'm not sure if I can apply the Alaska endorsement myself or if this needs to go to a specialist...", type:'Do I Need SRT?'},
-    {t:'10:15', who:'Customer',   text:"Well, can you figure it out? I really need to leave on schedule."},
-  ],
-  // Problem 3 — System Issue
-  [
     {t:'10:16', who:'Specialist', text:"Great news — the Alaska endorsement has been applied and the F-150 is confirmed on your fleet. You're all set for the trip!"},
     {t:'10:16', who:'Customer',   text:"That's such a relief. Thank you so much for handling all of this."},
     {t:'10:17', who:'Specialist', text:"Of course! Is there anything else I can help you with before we—"},
@@ -253,16 +252,13 @@ const summaryUpdates = [
     {atLine:6, text:"Verification slowed down when the customer pushed back on the SSN request, uncertain why it was needed."},
   ],
   [
-    {atLine:5, text:"After verification completed, Mr. Toyota provided vehicle details — 2021 Ford F-150 XLT, silver, plate IZN-7829, around 38,000 miles."},
-    {atLine:7, text:"He stressed that the Alaska coverage check is time-sensitive, as he is leaving in two days."},
+    {atLine:1, text:"Security verification completed — Mr. Toyota is cleared and ready to get started with his requests."},
   ],
   [
-    {atLine:3, text:"The F-150 was added to the fleet. Alaska state minimums require $100K liability for out-of-state policies, while Mr. Toyota's shows $50K — though the trip is temporary, which may change the approach."},
-    {atLine:6, text:"The specialist explored whether a temporary travel endorsement could cover the Alaska visit without modifying liability limits or involving SRT."},
-  ],
-  [
-    {atLine:2, text:"The call was wrapping up with all changes complete — F-150 added and Alaska endorsement applied."},
-    {atLine:4, text:"A sudden system update interrupted the call before any confirmation was sent. The specialist was unable to reach Mr. Toyota by callback. He leaves tomorrow morning."},
+    {atLine:1, text:"After verification completed, Mr. Toyota provided vehicle details — 2021 Ford F-150 XLT, silver, plate IZN-7829, around 38,000 miles."},
+    {atLine:3, text:"He stressed that the Alaska coverage check is time-sensitive, as he is leaving in two days."},
+    {atLine:6, text:"The call was wrapping up with all changes complete — F-150 added and Alaska endorsement applied."},
+    {atLine:10, text:"A sudden system update interrupted the call before any confirmation was sent. The specialist was unable to reach Mr. Toyota by callback. He leaves tomorrow morning."},
   ],
 ];
 
@@ -280,54 +276,28 @@ const problemData = [
   // Problem 0 — Caller Concern
   {
     solution: [
-      {tag:'SAY',   text:'Fair concern — we just need to <strong>confirm it\'s you</strong>'},
-      {tag:'SAY',   text:'SSN is <strong>never stored</strong> — only used for verification'},
+      {tag:'SAY',   text:'<strong>"Thanks for being a customer all these years"</strong> — acknowledge the relationship'},
+      {tag:'SAY',   text:'This step just <strong>protects your account</strong> — SSN is never stored'},
+      {tag:'DO',    text:'Offer <strong>alternate verification</strong> up front (DOB + policy details)'},
       {tag:'DO',    text:'Pause; let him <strong>decide to continue</strong>'},
-      {tag:'SAY',   text:'Offer <strong>alternate verification</strong> if needed'},
+      {tag:'NOTE',  text:'Long-time customer — lead with the relationship, offer alternate ID readily'},
     ],
-    relatedInfo: [
-      {label:'Customer',  value:'Dodge Toyota'},
-      {label:'Policy',    value:'P123457P854-922'},
-      {label:'Call type', value:'Caller Concern',          highlight:true},
-      {label:'Status',    value:'Verification incomplete', highlight:true},
-    ],
-    howIGotHere:     'Customer pushed back on SSN request mid-verification. Transcript shows anxiety, not hostility — a common trust barrier at this step.',
-    whyThisSolution: 'Validating the concern before explaining reduces defensive resistance. Handing back control makes him more likely to proceed voluntarily.',
+    relatedInfo: null,
+    howIGotHere:     'Loaded the customer profile and saw a 5+ year tenure (since Jan 2021). Established customers respond better to relationship acknowledgment than to policy justification, so I weighted the tone toward trust over procedure.',
+    whyThisSolution: 'Validating the concern before explaining reduces defensive resistance. For a long-standing customer, offering alternate verification up front shows the relationship is recognized — and makes him more likely to proceed voluntarily.',
   },
   // Problem 1 — Call Recap
   {
     solution: [
-      {tag:'DO',   text:'Add <strong>2021 F-150 XLT</strong>, plate IZN-7829, VIN ···4821'},
+      {tag:'DO',   text:'Add the <strong>new vehicle</strong> to his fleet policy'},
       {tag:'DO',   text:'Check Alaska <strong>travel compliance</strong> before he leaves'},
       {tag:'NOTE', text:'He mentioned Alaska twice — treat as <strong>high priority</strong>'},
     ],
-    relatedInfo: [
-      {label:'Customer',  value:'Dodge Toyota'},
-      {label:'Vehicle',   value:'2021 F-150 XLT, silver',  highlight:true},
-      {label:'Plate',     value:'IZN-7829 · VIN ···4821',  highlight:true},
-      {label:'Departure', value:'2 days — time-sensitive', highlight:true},
-    ],
+    relatedInfo: null,
     howIGotHere:     'Scanned the call before the verification detour. Two requests were stated clearly at the start of the call.',
     whyThisSolution: 'Verification detours cause agents to lose track of the original request. A structured recap prevents items from being dropped.',
   },
-  // Problem 2 — Do I Need SRT?
-  {
-    solution: [
-      {tag:'CHECK', text:'Whether a <strong>travel endorsement</strong> applies (check system)'},
-      {tag:'DO',    text:'Note trip <strong>dates and destination</strong> on the policy'},
-      {tag:'SAY',   text:'Alaska $100K min. is for <strong>permanent</strong> registrations'},
-      {tag:'NOTE',  text:'Try endorsement first — <strong>SRT likely not needed</strong>'},
-    ],
-    relatedInfo: [
-      {label:'Issue',      value:'$50K vs. $100K Alaska min.',  highlight:true},
-      {label:'Trip type',  value:'Temporary (not relocating)',   highlight:true},
-      {label:'SRT needed', value:'Likely no'},
-      {label:'Next step',  value:'Travel endorsement'},
-    ],
-    howIGotHere:     'Reviewed Alaska state requirements and confirmed the trip is temporary — that distinction changes the required action.',
-    whyThisSolution: 'Alaska\'s higher minimum targets permanent out-of-state vehicles, not temporary visitors. A travel endorsement avoids a liability increase and SRT involvement.',
-  },
-  // Problem 3 — System Issue
+  // Problem 2 — System Issue
   {
     solution: [
       {tag:'DO',   text:'Send <strong>follow-up email</strong> to Mr. Toyota now'},
@@ -336,12 +306,12 @@ const problemData = [
       {tag:'NOTE', text:'He leaves <strong>tomorrow morning</strong> — email before shift ends'},
     ],
     relatedInfo: [
-      {label:'Changes done', value:'F-150 added · Endorsement active', highlight:true},
-      {label:'Issue',        value:'System drop — no confirmation sent', highlight:true},
-      {label:'Urgency',      value:'Leaves tomorrow morning',            highlight:true},
-      {label:'Action',       value:'Follow-up email'},
+      {value:'Phone system offline — can\'t call him back'},
+      {value:'Cause: unplanned platform update'},
+      {value:'Policy records unaffected by the outage',          highlight:true},
+      {value:'His changes saved at 10:16, before the call dropped', highlight:true},
     ],
-    howIGotHere:     'Reviewed call state at disconnect. Both policy items were completed before the system update interrupted the call.',
+    howIGotHere:     'Checked system status and the policy records. The outage is limited to the phone system — the policy database is unaffected and shows both of Mr. Toyota\'s changes saved at 10:16, moments before the call dropped.',
     whyThisSolution: 'Everything on the policy side is done — he just doesn\'t know it yet. A proactive email prevents anxiety before his trip without waiting for system restoration.',
   },
 ];
@@ -357,7 +327,7 @@ const ORDER_CONFIGS = [
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 function init() {
   renderTranscript();
-  renderBanner();
+
   switchVersion(0);
   startTimer();
 }
@@ -380,21 +350,9 @@ function startTimer() {
   }, 1000);
 }
 
-// ─── BANNER ───────────────────────────────────────────────────────────────────
-function renderBanner() {
-  const el = document.getElementById('problemBanner');
-  el.textContent = bannerText[currentProblem];
-  el.className = `px-4 py-2 text-xs border-b flex-shrink-0 ${bannerStyles[currentProblem]}`;
-}
-
 // ─── VERSION SWITCHING (reorders left panel sections) ─────────────────────────
 function switchVersion(v) {
   currentVersion = v;
-  for (let i = 0; i < 3; i++) {
-    const tab = document.getElementById(`vtab${i}`);
-    const active = i === v;
-    tab.className = `px-4 py-2 text-sm font-medium rounded-t border border-b-0 ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'} ${i < 2 ? 'mr-1' : ''}`;
-  }
   const cfg = ORDER_CONFIGS[v];
   document.getElementById('profileSection').style.order    = cfg.profile;
   document.getElementById('summarySection').style.order    = cfg.summary;
@@ -440,6 +398,11 @@ function renderTranscript() {
     return;
   }
 
+  // Render all fully-completed problems
+  for (let p = 0; p < currentProblem; p++) {
+    for (const line of transcripts[p]) appendTranscriptLine(container, line);
+  }
+  // Render partial current problem
   const lines = transcripts[currentProblem];
   const count = Math.min(transcriptRevealed, lines.length);
   for (let i = 0; i < count; i++) appendTranscriptLine(container, lines[i]);
@@ -539,16 +502,16 @@ function toggleLine(div, line) {
 }
 
 function updateBottom() {
-  const empty  = document.getElementById('bottomEmpty');
-  const selEl  = document.getElementById('bottomSelected');
-  const textEl = document.getElementById('selectedText');
+  const ctx     = document.getElementById('selectedContext');
+  const textEl  = document.getElementById('selectedText');
+  const clearBtn = document.getElementById('clearBtn');
   if (selected.length > 0) {
-    empty.classList.add('hidden');
-    selEl.classList.remove('hidden');
+    ctx.classList.remove('hidden');
+    clearBtn.classList.remove('hidden');
     textEl.innerHTML = selected.map(s => esc(s.text)).join('<br>');
   } else {
-    empty.classList.remove('hidden');
-    selEl.classList.add('hidden');
+    ctx.classList.add('hidden');
+    clearBtn.classList.add('hidden');
   }
 }
 
@@ -556,6 +519,60 @@ function clearSelection() {
   selected = [];
   document.querySelectorAll('.transcript-line.selected').forEach(el => el.classList.remove('selected'));
   updateBottom();
+}
+
+// Shared yellow pulse → persistent highlight. JS timer drives the swap so the
+// "stays after the animation" state holds regardless of CSS animation-clock quirks.
+function pulseHighlight(el) {
+  if (!el) return;
+  el.classList.remove('tenure-pulse', 'tenure-held');
+  void el.offsetWidth;            // restart animation
+  el.classList.add('tenure-pulse');
+  setTimeout(() => {
+    // skip if the highlight was dismissed mid-pulse (deleted keyword / advanced)
+    if (!el.classList.contains('tenure-pulse')) return;
+    el.classList.remove('tenure-pulse');
+    el.classList.add('tenure-held');
+  }, 3200);
+}
+
+function clearHighlight(el) {
+  if (el) el.classList.remove('tenure-pulse', 'tenure-held');
+}
+
+// ─── CALL RECAP: highlight of the original request line ───────────────────────
+// Shows the same yellow highlight on Mr. Toyota's original request, triggered two ways:
+//   1. typing a trigger word in the question field (keyword method), or
+//   2. selecting lines + Ask (handled in askHelperBot).
+// Dismissed when the keyword is deleted / a non-keyword is typed, or on advancing.
+const RECAP_TRIGGERS = ['recap','need','want','remind','request','summary','summarise','summarize',
+  'add','car','vehicle','fleet','alaska','driving','drive','before'];
+const RECAP_SOURCE_TEXT = 'trying to add a new car to my fleet';
+
+function findRecapLine() {
+  let target = null;
+  document.querySelectorAll('#transcriptContainer .transcript-line').forEach(el => {
+    if (el.textContent.includes(RECAP_SOURCE_TEXT)) target = el;
+  });
+  return target;
+}
+
+// Called on every keystroke in the question field.
+function maybeHighlightRecapSource() {
+  if (currentProblem !== 1) return;
+  const target = findRecapLine();
+  if (!target) return;
+  const val = (document.getElementById('highlightInput')?.value || '').toLowerCase();
+  const matched = val.trim() && RECAP_TRIGGERS.some(k => val.includes(k));
+
+  if (!matched) {                 // deleted keyword / typed a non-keyword → dismiss
+    clearHighlight(target);
+    return;
+  }
+  // already highlighted — don't re-scroll on every keystroke
+  if (target.classList.contains('tenure-pulse') || target.classList.contains('tenure-held')) return;
+  target.scrollIntoView({behavior:'smooth', block:'center'});
+  pulseHighlight(target);
 }
 
 // ─── RESPONSE ─────────────────────────────────────────────────────────────────
@@ -580,6 +597,15 @@ function askHelperBot() {
         setTimeout(() => {
           area.innerHTML = buildResponseHTML();
           thinking = false;
+          if (currentProblem === 0) {
+            pulseHighlight(document.getElementById('sinceField'));
+          } else if (currentProblem === 1) {
+            const recap = findRecapLine();
+            if (recap && !recap.classList.contains('tenure-pulse') && !recap.classList.contains('tenure-held')) {
+              recap.scrollIntoView({behavior:'smooth', block:'center'});
+              pulseHighlight(recap);
+            }
+          }
         }, 200);
       }
     }, delay);
@@ -591,19 +617,24 @@ function buildResponseHTML() {
 
   const bulletsHTML = prob.solution.map(item => {
     const tagCls = TAG_COLORS[item.tag] || 'bg-gray-600 text-gray-300';
-    return `<li class="flex items-start gap-2.5">
-      <span class="flex-shrink-0 text-[11px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded mt-0.5 ${tagCls}">${item.tag}</span>
+    return `<li>
+      <span class="sol-tag text-[11px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded mt-0.5 ${tagCls}">${item.tag}</span>
       <span class="text-sm leading-snug text-gray-900">${item.text}</span>
     </li>`;
   }).join('');
 
-  const infoHTML = prob.relatedInfo.map(item => {
-    const valCls = item.highlight ? 'text-gray-900 font-semibold' : 'text-gray-500 font-medium';
-    return `<div class="mb-2">
-      <p class="text-xs text-gray-400 mb-0.5 uppercase tracking-wide">${item.label}</p>
-      <p class="text-sm ${valCls} leading-snug">${item.value}</p>
-    </div>`;
-  }).join('');
+  const hasInfo = prob.relatedInfo && prob.relatedInfo.length > 0;
+
+  const infoColumnHTML = hasInfo ? `
+      <div class="flex-1 p-4" style="background:#E5E7EB">
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Related info</p>
+        <ul class="space-y-2">
+          ${prob.relatedInfo.map(item => {
+            const valCls = item.highlight ? 'text-gray-800 font-semibold' : 'text-gray-500';
+            return `<li class="flex items-start gap-2 text-sm ${valCls} leading-snug"><span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0"></span>${item.value}</li>`;
+          }).join('')}
+        </ul>
+      </div>` : '';
 
   return `<div class="fade-in space-y-2 w-full">
 
@@ -611,18 +642,14 @@ function buildResponseHTML() {
     <div class="rounded-xl overflow-hidden flex">
 
       <!-- Solution column -->
-      <div class="flex-none w-3/5 p-4" style="background:#EFF6FF">
+      <div class="${hasInfo ? 'flex-none w-3/5' : 'w-full'} p-4" style="background:#EFF6FF">
         <p class="text-xs font-bold uppercase tracking-widest text-blue-400 mb-3">Solution</p>
-        <ul class="space-y-2.5">
+        <ul class="solution-grid">
           ${bulletsHTML}
         </ul>
       </div>
 
-      <!-- Related info column -->
-      <div class="flex-1 p-4" style="background:#E5E7EB">
-        <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Related info</p>
-        ${infoHTML}
-      </div>
+      ${infoColumnHTML}
 
     </div>
 
@@ -655,6 +682,9 @@ function resetPanel() {
       <p class="text-sm text-gray-400 mt-1">Click any transcript line on the left to highlight context, then ask Helper Bot.</p>
     </div>`;
   selected = [];
+  document.querySelectorAll('.transcript-line.selected').forEach(el => el.classList.remove('selected'));
+  document.querySelectorAll('#transcriptContainer .transcript-line.tenure-pulse, #transcriptContainer .transcript-line.tenure-held').forEach(el => el.classList.remove('tenure-pulse', 'tenure-held'));
+  clearHighlight(document.getElementById('sinceField'));
   const inp = document.getElementById('highlightInput');
   if (inp) inp.value = '';
   updateBottom();
@@ -667,7 +697,7 @@ function prevProblem() {
     currentProblem--;
     transcriptRevealed = transcripts[currentProblem].length;
     renderTranscript();
-    renderBanner();
+  
     resetPanel();
     rebuildSummary(currentProblem);
     document.getElementById('customerProfile').classList.remove('hidden');
@@ -675,15 +705,39 @@ function prevProblem() {
 }
 
 function nextProblem() {
-  if (currentProblem < 3) {
+  if (currentProblem < 2) {
     transcriptAnimating = false;
     currentProblem++;
     transcriptRevealed = 0;
-    renderBanner();
+
     resetPanel();
-    document.getElementById('transcriptContainer').innerHTML = '';
     animateTranscript();
   }
+}
+
+// Clear everything for the current problem and replay it from its first line.
+// Prior problems' transcript lines stay; only the current problem restarts.
+function restartProblem() {
+  transcriptAnimating = false;
+  transcriptRevealed = 0;
+  resetPanel();   // clears answer panel, selection, highlights, input
+
+  // Roll the running call summary back to the state before this problem.
+  if (currentProblem === 0) {
+    document.getElementById('callSummary').innerHTML =
+      '<span class="text-gray-400 italic">Call in progress — awaiting transcript.</span>';
+    document.getElementById('customerProfile').classList.add('hidden'); // re-reveals when problem 0 completes
+  } else {
+    rebuildSummary(currentProblem - 1);
+  }
+
+  // Rebuild transcript: keep prior problems' lines, drop this problem's, then replay.
+  const container = document.getElementById('transcriptContainer');
+  container.innerHTML = '';
+  for (let p = 0; p < currentProblem; p++) {
+    for (const line of transcripts[p]) appendTranscriptLine(container, line);
+  }
+  animateTranscript();
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
