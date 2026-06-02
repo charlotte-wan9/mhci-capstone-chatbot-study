@@ -101,9 +101,17 @@
     <span class="text-xs text-gray-400 font-mono" id="callTimer">00:03:12</span>
   </div>
   <div class="flex-1"></div>
-  <button onclick="restartProblem()" title="Clear everything and replay this problem from the top" class="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 mr-1">↻ Restart</button>
-  <button onclick="prevProblem()" class="text-xs px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">← Prev Problem</button>
-  <button onclick="nextProblem()" class="text-xs px-3 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-800">Next Problem →</button>
+  <!-- Demo controls -->
+  <div id="demoControls" class="hidden flex items-center gap-2">
+    <span class="text-xs text-amber-600 font-medium mr-1">Practice demo</span>
+    <button onclick="startStudy()" class="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium">Continue to the study →</button>
+  </div>
+  <!-- Study controls -->
+  <div id="studyControls" class="flex items-center gap-1">
+    <button onclick="restartProblem()" title="Clear everything and replay this problem from the top" class="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 mr-1">↻ Restart</button>
+    <button onclick="prevProblem()" class="text-xs px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">← Prev Problem</button>
+    <button onclick="nextProblem()" class="text-xs px-3 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-800">Next Problem →</button>
+  </div>
 </div>
 
 <!-- MAIN -->
@@ -170,7 +178,7 @@
     <!-- Bottom: nothing selected -->
     <!-- Bottom: always visible -->
     <div id="bottomPanel" class="border-t border-gray-200 bg-white p-3 flex-shrink-0">
-      <p class="text-xs text-gray-400 italic mb-1.5">⚠ Consider double-checking AI answers. Supported: Caller Concern · Call Recap · System Issue.</p>
+      <p id="botDisclaimer" class="text-xs text-gray-400 italic mb-1.5">⚠ Consider double-checking AI answers. Supported: Caller Concern · Call Recap · System Issue.</p>
       <div id="selectedContext" class="hidden mb-2">
         <p class="text-sm text-gray-500 font-medium mb-1">Selected context:</p>
         <div id="selectedText" class="text-sm bg-blue-50 text-blue-800 rounded p-2 italic max-h-16 overflow-y-auto"></div>
@@ -204,6 +212,7 @@ const TYPE_THEME = {
   'Caller Concern': { bg:'#7e22ce', text:'#fff', arrow:'#7e22ce' },
   'Call Recap':     { bg:'#b45309', text:'#fff', arrow:'#b45309' },
   'System Issue':   { bg:'#b91c1c', text:'#fff', arrow:'#b91c1c' },
+  'Request':        { bg:'#475569', text:'#fff', arrow:'#475569' },  // demo only
 };
 
 // ─── TRANSCRIPT DATA ──────────────────────────────────────────────────────────
@@ -324,19 +333,118 @@ const ORDER_CONFIGS = [
   {profile:2, summary:3, transcript:1},   // V3: Transcript → Profile → Summary
 ];
 
+// ─── DEMO (simple practice example shown before the real study) ───────────────
+let demoMode = false;
+let studyVersion = 0;
+let REAL_PROFILE_HTML = '';   // captured at init so we can restore it after the demo
+
+const DEMO_TRANSCRIPTS = [[
+  {t:'00:01', who:'Specialist', text:"Hi! Thanks for calling support — how can I help today?"},
+  {t:'00:02', who:'Customer',   text:"Hi, I'd like to update the email address on my account.", type:'Request'},
+  {t:'00:03', who:'Specialist', text:"Happy to help with that — let me pull up your account."},
+  {t:'00:04', who:'Customer',   text:"Thanks! Could you also tell me which plan I'm on?", type:'Request'},
+]];
+
+const DEMO_SUMMARY = [[
+  {atLine:1, text:"The customer wants to update the email address on their account."},
+  {atLine:3, text:"They also asked which plan they're currently on."},
+]];
+
+const DEMO_PROBLEMS = [{
+  solution: [
+    {tag:'DO',   text:'Update the <strong>email address</strong> on file'},
+    {tag:'SAY',  text:'Read the <strong>new email back</strong> to confirm it'},
+    {tag:'NOTE', text:'They also asked about their <strong>current plan</strong>'},
+  ],
+  relatedInfo: [
+    {value:'Account in good standing'},
+    {value:'Current plan: Standard (monthly)', highlight:true},
+  ],
+  howIGotHere:     'This is a practice example — a simple two-part request, to show how Helper Bot reads the call and suggests next steps.',
+  whyThisSolution: 'Confirming the new email avoids typos, and flagging the plan question keeps the second request from being forgotten.',
+}];
+
+const DEMO_PROFILE_HTML = `
+  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Customer Profile</p>
+  <div class="bg-gray-50 rounded p-3">
+    <div class="flex items-center gap-2 mb-2">
+      <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center flex-shrink-0">SR</div>
+      <div class="flex-1">
+        <p class="text-sm font-semibold text-gray-800">Sam Rivera</p>
+        <p class="text-sm text-gray-500">Account holder</p>
+      </div>
+      <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span>
+    </div>
+    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+      <div><span class="text-gray-400">Plan: </span><span class="text-gray-700">Standard</span></div>
+      <div><span class="text-gray-400">Member since: </span><span class="text-gray-700">2023</span></div>
+    </div>
+  </div>`;
+
+// data accessors — return demo data while in demo mode, real study data otherwise
+function curTranscripts() { return demoMode ? DEMO_TRANSCRIPTS : transcripts; }
+function curSummary()     { return demoMode ? DEMO_SUMMARY     : summaryUpdates; }
+function curProblems()    { return demoMode ? DEMO_PROBLEMS    : problemData; }
+
+function setHeaderMode(mode) {
+  const demo = mode === 'demo';
+  document.getElementById('demoControls').classList.toggle('hidden', !demo);
+  document.getElementById('studyControls').classList.toggle('hidden', demo);
+}
+
+function enterDemo() {
+  demoMode = true;
+  transcriptAnimating = false;
+  currentProblem = 0;
+  transcriptRevealed = 0;
+  setHeaderMode('demo');
+  document.getElementById('botDisclaimer').textContent =
+    '👋 Practice demo — try clicking a line or typing a question, then press Ask.';
+  const profile = document.getElementById('customerProfile');
+  profile.innerHTML = DEMO_PROFILE_HTML;
+  profile.classList.add('hidden');   // reveals when the demo transcript finishes
+  document.getElementById('callSummary').innerHTML =
+    '<span class="text-gray-400 italic">Call in progress — awaiting transcript.</span>';
+  resetPanel();
+  const container = document.getElementById('transcriptContainer');
+  container.innerHTML = '';
+  container.style.paddingBottom = '';
+  animateTranscript();
+}
+
+function startStudy() {
+  demoMode = false;
+  transcriptAnimating = false;
+  currentProblem = 0;
+  transcriptRevealed = 0;
+  setHeaderMode('study');
+  document.getElementById('botDisclaimer').textContent =
+    '⚠ Consider double-checking AI answers. Supported: Caller Concern · Call Recap · System Issue.';
+  const profile = document.getElementById('customerProfile');
+  profile.innerHTML = REAL_PROFILE_HTML;
+  profile.classList.add('hidden');
+  document.getElementById('callSummary').innerHTML =
+    '<span class="text-gray-400 italic">Call in progress — awaiting transcript.</span>';
+  resetPanel();
+  switchVersion(studyVersion);
+  renderTranscript();   // shows the ▶ Start button for problem 0
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 function init() {
+  REAL_PROFILE_HTML = document.getElementById('customerProfile').innerHTML;
   renderTranscript();
-
   switchVersion(0);
   startTimer();
 }
 
 function beginStudy(idx) {
+  studyVersion = idx;
   switchVersion(idx);
   const overlay = document.getElementById('intro-overlay');
   overlay.style.opacity = '0';
   setTimeout(() => overlay.style.display = 'none', 300);
+  enterDemo();
 }
 
 // ─── TIMER ────────────────────────────────────────────────────────────────────
@@ -431,7 +539,7 @@ function animateTranscript() {
   if (transcriptAnimating) return;
   transcriptAnimating = true;
   const prob = currentProblem;
-  const lines = transcripts[prob];
+  const lines = curTranscripts()[prob];
   const container = document.getElementById('transcriptContainer');
 
   function showNext() {
@@ -453,7 +561,7 @@ function animateTranscript() {
         lineEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }
-    const update = summaryUpdates[prob].find(u => u.atLine === transcriptRevealed);
+    const update = curSummary()[prob].find(u => u.atLine === transcriptRevealed);
     if (update) animateSummary(update.text);
     transcriptRevealed++;
     setTimeout(showNext, 950);
@@ -626,7 +734,9 @@ function askHelperBot() {
         setTimeout(() => {
           area.innerHTML = buildResponseHTML();
           thinking = false;
-          if (currentProblem === 0) {
+          if (demoMode) {
+            // demo: no problem-specific highlights
+          } else if (currentProblem === 0) {
             pulseHighlight(document.getElementById('sinceField'));
           } else if (currentProblem === 1) {
             const recap = findRecapLine();
@@ -642,7 +752,7 @@ function askHelperBot() {
 }
 
 function buildResponseHTML() {
-  const prob = problemData[currentProblem];
+  const prob = curProblems()[currentProblem];
 
   const bulletsHTML = prob.solution.map(item => {
     const tagCls = TAG_COLORS[item.tag] || 'bg-gray-600 text-gray-300';
@@ -721,6 +831,7 @@ function resetPanel() {
 }
 
 function prevProblem() {
+  if (demoMode) return;
   if (currentProblem > 0) {
     transcriptAnimating = false;
     currentProblem--;
@@ -734,6 +845,7 @@ function prevProblem() {
 }
 
 function nextProblem() {
+  if (demoMode) return;
   if (currentProblem < 2) {
     transcriptAnimating = false;
     currentProblem++;
@@ -747,6 +859,7 @@ function nextProblem() {
 // Clear everything for the current problem and replay it from its first line.
 // Prior problems' transcript lines stay; only the current problem restarts.
 function restartProblem() {
+  if (demoMode) return;
   transcriptAnimating = false;
   transcriptRevealed = 0;
   resetPanel();   // clears answer panel, selection, highlights, input
