@@ -577,8 +577,14 @@ function maybeHighlightRecapSource() {
 
 // ─── RESPONSE ─────────────────────────────────────────────────────────────────
 function askHelperBot() {
-  if (selected.length === 0 || thinking) return;
+  const hasText = (document.getElementById('highlightInput')?.value || '').trim().length > 0;
+  // allow sending with EITHER a typed question OR a selected transcript line
+  if ((selected.length === 0 && !hasText) || thinking) return;
   thinking = true;
+
+  const inp = document.getElementById('highlightInput');
+  if (inp) inp.value = '';   // clear the question box after sending
+  clearSelection();          // clear any attached transcript lines after sending
 
   const area = document.getElementById('responseArea');
   area.innerHTML = `<div class="p-4">
