@@ -385,11 +385,24 @@ function appendTranscriptLine(container, line) {
   }
   div.addEventListener('click', () => toggleLine(div, line));
   container.appendChild(div);
+  return div;
+}
+
+// Scroll so a line sits at the top of the transcript window, with the prior
+// content visibly scrolling up. Bottom padding acts as a spacer so the line can
+// actually reach the top even when little content follows it yet.
+function scrollLineToTop(lineEl) {
+  const container = document.getElementById('transcriptContainer');
+  container.style.paddingBottom = container.clientHeight + 'px';
+  const top = container.scrollTop +
+    (lineEl.getBoundingClientRect().top - container.getBoundingClientRect().top);
+  container.scrollTo({ top, behavior: 'smooth' });
 }
 
 function renderTranscript() {
   const container = document.getElementById('transcriptContainer');
   container.innerHTML = '';
+  container.style.paddingBottom = '';   // drop any section spacer
 
   if (currentProblem === 0 && transcriptRevealed === 0) {
     container.innerHTML = `<div class="flex items-center justify-center h-full">
@@ -428,8 +441,18 @@ function animateTranscript() {
       if (prob === 0) document.getElementById('customerProfile').classList.remove('hidden');
       return;
     }
-    appendTranscriptLine(container, lines[transcriptRevealed]);
-    container.scrollTop = container.scrollHeight;
+    const isSectionStart = (transcriptRevealed === 0);
+    const lineEl = appendTranscriptLine(container, lines[transcriptRevealed]);
+    if (isSectionStart && prob > 0) {
+      // new situation: bring its first line to the top, scrolling prior content up
+      scrollLineToTop(lineEl);
+    } else {
+      // only scroll once new lines spill below the visible area (keeps section top fixed)
+      const cRect = container.getBoundingClientRect();
+      if (lineEl.getBoundingClientRect().bottom > cRect.bottom) {
+        lineEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
     const update = summaryUpdates[prob].find(u => u.atLine === transcriptRevealed);
     if (update) animateSummary(update.text);
     transcriptRevealed++;
@@ -740,6 +763,7 @@ function restartProblem() {
   // Rebuild transcript: keep prior problems' lines, drop this problem's, then replay.
   const container = document.getElementById('transcriptContainer');
   container.innerHTML = '';
+  container.style.paddingBottom = '';   // drop any section spacer; replay re-adds if needed
   for (let p = 0; p < currentProblem; p++) {
     for (const line of transcripts[p]) appendTranscriptLine(container, line);
   }
